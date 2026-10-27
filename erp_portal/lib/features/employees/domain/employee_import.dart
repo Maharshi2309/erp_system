@@ -6,6 +6,7 @@ import '../../organization/domain/branch.dart';
 import 'custom_field.dart';
 import 'employee.dart';
 import 'employee_rules.dart';
+import 'field_settings.dart';
 
 /// File limits (PRD §6.4, board S46).
 const maxImportBytes = 5 * 1024 * 1024;
@@ -57,8 +58,8 @@ enum ImportField {
   lastName('Last name', required: true),
   workEmail('Work email'),
   mobile('Mobile number'),
-  designation('Designation', required: true),
-  department('Department', required: true),
+  designation('Designation'),
+  department('Department'),
   branch('Branch', required: true),
   manager('Reporting manager (by name)'),
   joiningDate('Joining date', required: true),
@@ -68,8 +69,34 @@ enum ImportField {
   const ImportField(this.label, {this.required = false});
 
   final String label;
+
+  /// Always required (core fields); others follow the field settings.
   final bool required;
+
+  /// The built-in field the column fills, when its rule can change.
+  StandardField? get standard => switch (this) {
+    workEmail => StandardField.workEmail,
+    mobile => StandardField.mobile,
+    designation => StandardField.designation,
+    department => StandardField.department,
+    _ => null,
+  };
+
+  bool isRequired(EmployeeFieldSettings s) =>
+      required || (standard != null && s.requires(standard!));
+
+  bool isShown(EmployeeFieldSettings s) =>
+      standard == null || s.shows(standard!);
 }
+
+/// Required fields that an import file can't carry; asked on the profile.
+const _notImportable = {
+  'displayName': 'Display name',
+  'personalEmail': 'Personal email',
+  'dateOfBirth': 'Date of birth',
+  'emergencyContact': 'Emergency contact',
+  'workLocation': 'Work location',
+};
 
 /// What a column goes into: a standard field, a custom field, or nothing.
 @immutable
@@ -94,7 +121,12 @@ class ImportTarget {
   int get hashCode => id.hashCode;
 }
 
-String _normal(String s) => s.toLowerCase().replaceAll(RegExp('[^a-z0-9]'), '');
+/// "Joining date (DD/MM/YYYY)" → "joiningdate": hints in brackets are
+/// ignored, so our own template's headers match (D-80).
+String _normal(String s) => s
+    .replaceAll(RegExp(r'\(.*?\)'), '')
+    .toLowerCase()
+    .replaceAll(RegExp('[^a-z0-9]'), '');
 
 const _synonyms = <ImportField, List<String>>{
   ImportField.code: [
@@ -152,8 +184,9 @@ const _synonyms = <ImportField, List<String>>{
 /// Matches columns to fields by name. Returns one target per header.
 List<ImportTarget> autoMatchColumns(
   List<String> headers,
-  Iterable<CustomField> fields,
-) {
+  Iterable<CustomField> fields, [
+  EmployeeFieldSettings settings = const EmployeeFieldSettings(),
+]) {
   final used = <ImportTarget>{};
   return [
     for (final header in headers)
@@ -162,7 +195,10 @@ List<ImportTarget> autoMatchColumns(
         ImportTarget? target;
         for (final entry in _synonyms.entries) {
           if (entry.value.contains(n)) {
-            target = ImportTarget.field(entry.key);
+            // Hidden fields aren't imported (D-73).
+            target = entry.key.isShown(settings)
+                ? ImportTarget.field(entry.key)
+                : const ImportTarget.ignore();
             break;
           }
         }
@@ -286,6 +322,7 @@ class ImportContext {
     required this.fields,
     required this.dateOrder,
     required this.sendInvites,
+    this.settings = const EmployeeFieldSettings(),
   });
 
   final String organizationId;
@@ -294,6 +331,7 @@ class ImportContext {
   final List<CustomField> fields;
   final DateOrder? dateOrder;
   final bool sendInvites;
+  final EmployeeFieldSettings settings;
 }
 
 /// Finds a branch by name or code, then by the longest name the text starts
@@ -376,9 +414,12 @@ Object? _parseCustom(CustomField f, String raw, DateOrder? order) {
 }
 
 /// Required standard fields that no column is mapped to.
-List<ImportField> unmappedRequired(List<ImportTarget> mapping) => [
+List<ImportField> unmappedRequired(
+  List<ImportTarget> mapping, [
+  EmployeeFieldSettings settings = const EmployeeFieldSettings(),
+]) => [
   for (final f in ImportField.values)
-    if (f.required && !mapping.contains(ImportTarget.field(f))) f,
+    if (f.isRequired(settings) && !mapping.contains(ImportTarget.field(f))) f,
 ];
 
 /// Columns mapped to the joining date whose values could be read two ways.
@@ -598,8 +639,15 @@ List<ImportRow> classifyRows(
       fields: ctx.fields,
       branch: branch,
       sendInvite: false,
+      settings: ctx.settings,
     );
     for (final entry in errors.entries) {
+      if (_notImportable[entry.key] case final label?) {
+        warnings.add(
+          '$label is required — add it on the profile after import.',
+        );
+        continue;
+      }
       // Already reported above in import wording.
       if (entry.key == 'branchId' || entry.key == 'shift') continue;
       if (entry.key == 'managerId' && branch == null) continue;

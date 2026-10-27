@@ -85,6 +85,7 @@ abstract final class AppRoutes {
   static const corrections = '/attendance/corrections'; // Q-12
   static const monthlySummary = '/attendance/monthly'; // S56
   static const attendanceExports = '/attendance/exports'; // Q-12
+  static const faceCheck = '/attendance/face-check'; // D-70
   static String correctAttendance(String employeeId, DateTime date) =>
       '/attendance/correct/$employeeId/${isoDate(date)}'; // S55
 
@@ -98,9 +99,14 @@ abstract final class AppRoutes {
   static String myLeaveRequest(String id) => '/my/leave/$id'; // S91
   static const myHolidays = '/my/holidays'; // S93
   static const myProfile = '/my/profile'; // S94
+  static const myFace = '/my/profile/face'; // D-71
   static String myDay(DateTime date) =>
       '/my/attendance/${isoDate(date)}'; // S88
   static const teamApprovals = '/team/approvals'; // S34
+
+  // Platform super admin, statistics only (D-75; boards S97–S98).
+  static const platform = '/platform'; // S97
+  static String platformOrg(String id) => '/platform/orgs/$id'; // S98
 
   // Demo builds only.
   static const designSystem = '/dev/design-system'; // S01, S02

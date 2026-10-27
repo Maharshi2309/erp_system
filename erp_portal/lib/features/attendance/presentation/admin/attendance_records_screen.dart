@@ -76,14 +76,14 @@ class _AttendanceRecordsScreenState
           r.corrected ? 'Yes · ${r.correctedBy}' : '',
         ],
     ];
-    ref
-        .read(fileDownloadsProvider)
-        .save(
-          'attendance_${isoDate(rows.first.date)}.xlsx',
-          buildXlsx('Attendance', data),
-          mimeType: xlsxMimeType,
-        );
-    showAppToast(context, 'Exported ${rows.length} records');
+    startDownload(
+      context,
+      ref,
+      'attendance_${isoDate(rows.first.date)}.xlsx',
+      buildXlsx('Attendance', data),
+      mimeType: xlsxMimeType,
+      done: 'Exported ${rows.length} records',
+    );
   }
 
   @override

@@ -102,15 +102,16 @@ class RolesScope {
   String branchName(String id) =>
       branches.where((b) => b.id == id).firstOrNull?.name ?? id;
 
-  /// "Organization-wide", "Surat, Vadodara", "Own team (6)", "Own records".
+  /// Whose information they see: "Everyone", "Surat, Vadodara",
+  /// "Their team (6)", "Only themselves" (D-79 wording).
   String scopeOf(AccessRow r) => switch (r.role.scope) {
-    DataScope.organization => 'Organization-wide',
+    DataScope.organization => 'Everyone',
     DataScope.assignedBranches =>
       r.branchIds.isEmpty
-          ? 'No branch'
+          ? 'No branch chosen'
           : r.branchIds.map(branchName).join(', '),
-    DataScope.ownTeam => 'Own team (${r.teamSize})',
-    DataScope.ownRecords => 'Own records',
+    DataScope.ownTeam => 'Their team (${r.teamSize})',
+    DataScope.ownRecords => 'Only themselves',
   };
 }
 
@@ -130,7 +131,8 @@ class RolesSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(sessionProvider);
     final access = ref.watch(accessDataProvider);
-    final employees = ref.watch(employeesProvider);
+    // Branch managers only see invitations for their own branches.
+    final employees = ref.watch(visibleEmployeesProvider);
     final branches = ref.watch(branchesProvider);
     if (session == null) return const SizedBox.shrink();
     if (access.isLoading || employees.isLoading || branches.isLoading) {

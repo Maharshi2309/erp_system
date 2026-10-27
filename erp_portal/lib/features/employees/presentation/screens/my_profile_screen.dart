@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../app/router/route_names.dart';
 import '../../../../core/errors/failure.dart';
 import '../../../../core/responsive/responsive_page.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -14,6 +16,7 @@ import '../../../../core/widgets/app_overlays.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/skeleton.dart';
 import '../../../../core/widgets/state_views.dart';
+import '../../../attendance/presentation/attendance_providers.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../organization/presentation/providers/organization_providers.dart';
 import '../../../settings/domain/settings.dart';
@@ -54,6 +57,8 @@ class MyProfileScreen extends ConsumerWidget {
         .where((b) => b.id == self.branchId)
         .firstOrNull;
     final settings = ref.watch(orgSettingsProvider).value;
+    final attendance = ref.watch(attendanceDataProvider).value;
+    final face = attendance?.faceProfileOf(self.id);
     final language =
         self.customValues['preferred_language'] as String? ??
         settings?.branding.language ??
@@ -211,6 +216,19 @@ class MyProfileScreen extends ConsumerWidget {
                   color: twoStep ? null : AppColors.warningText,
                 ),
                 row('Signed in on', 'This browser'),
+                row(
+                  'Face for attendance',
+                  attendance?.isFaceExempt(self.id) == true
+                      ? 'Not needed — set by HR'
+                      : face?.status.label ?? 'Not set up',
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: () => context.go(AppRoutes.myFace),
+                    child: Text(face == null ? 'Set up' : 'Manage'),
+                  ),
+                ),
               ],
             ),
           ),
@@ -305,6 +323,7 @@ class _ContactDialogState extends ConsumerState<_ContactDialog> {
               isOptional: true,
               controller: _emergency,
               helperText: 'Name and phone number',
+              errorText: _errors['emergencyContact'],
             ),
             const SizedBox(height: AppSpacing.md),
             AppDropdownField<String>(

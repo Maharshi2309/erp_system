@@ -23,9 +23,23 @@ final designNow = DateTime.utc(2026, 10, 14, 8, 40);
 class FakeDownloads implements FileDownloads {
   final saved = <(String, Uint8List)>[];
 
+  /// Tests set this to simulate the person cancelling the save dialog.
+  bool cancel = false;
+
+  /// Tests set this to simulate a file that can't be written.
+  bool fail = false;
+
   @override
-  void save(String fileName, Uint8List bytes, {required String mimeType}) =>
-      saved.add((fileName, bytes));
+  Future<bool> save(
+    String fileName,
+    Uint8List bytes, {
+    required String mimeType,
+  }) async {
+    if (fail) throw StateError('disk full');
+    if (cancel) return false;
+    saved.add((fileName, bytes));
+    return true;
+  }
 }
 
 /// Downloads from the most recent [pumpStafflineApp].

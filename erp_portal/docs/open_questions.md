@@ -105,7 +105,9 @@ List in `screen_inventory.md` (end). Options per item: (a) leave out and hide th
 | Email template editor | 7 | (a) hide link |
 | Platform: Support access, Plans & billing, Platform audit, System status, read-only workspace | 7 | (a) unless Q-13 says platform admin is in scope |
 
-### Q-13 · Platform super-admin — Open (Phase 7)
+### Q-13 · Platform super-admin — Answered in part, 24 Oct 2026 (D-75)
+**Answer:** a statistics-only super admin (no personal data) is built. Support access, plans & billing, suspend and owner account help remain open.
+
 PRD marks it optional; design has two screens. **Recommendation:** defer to after release 1 unless you operate Staffline as SaaS now.
 
 ### Q-14 · Deactivated membership in organization selector — Open (Phase 2)

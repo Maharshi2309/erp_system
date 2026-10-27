@@ -7,9 +7,11 @@ import '../../features/attendance/presentation/admin/attendance_overview_screen.
 import '../../features/attendance/presentation/admin/attendance_records_screen.dart';
 import '../../features/attendance/presentation/admin/correction_screen.dart';
 import '../../features/attendance/presentation/admin/corrections_screen.dart';
+import '../../features/attendance/presentation/admin/face_check_screen.dart';
 import '../../features/attendance/presentation/admin/missing_punches_screen.dart';
 import '../../features/attendance/presentation/admin/monthly_summary_screen.dart';
 import '../../features/attendance/presentation/employee_home_screen.dart';
+import '../../features/attendance/presentation/face_setup_screen.dart';
 import '../../features/attendance/presentation/my_attendance_screen.dart';
 import '../../features/audit/presentation/audit_screens.dart';
 import '../../features/auth/domain/auth_state.dart';
@@ -50,6 +52,7 @@ import '../../features/organization/presentation/screens/branch_detail_screen.da
 import '../../features/organization/presentation/screens/branch_edit_screen.dart';
 import '../../features/organization/presentation/screens/branches_screen.dart';
 import '../../features/organization/presentation/screens/organization_profile_screen.dart';
+import '../../features/platform/presentation/platform_screens.dart';
 import '../../features/reports/presentation/report_screens.dart';
 import '../../features/roles/presentation/role_editor_screen.dart';
 import '../../features/roles/presentation/roles_screens.dart';
@@ -99,6 +102,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     AppRoutes.corrections: CorrectionsScreen(),
     AppRoutes.monthlySummary: MonthlySummaryScreen(),
     AppRoutes.attendanceExports: AttendanceExportsScreen(),
+    AppRoutes.faceCheck: FaceCheckScreen(),
     AppRoutes.home: EmployeeHomeScreen(),
     AppRoutes.myAttendance: MyAttendanceScreen(),
     AppRoutes.myLeave: MyLeaveScreen(),
@@ -173,6 +177,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       page(
         AppRoutes.employeeEdit(':id'),
         (state) => EmployeeFormScreen(employeeId: state.pathParameters['id']),
+      ),
+      ShellRoute(
+        builder: (context, state, child) => PlatformShell(child: child),
+        routes: [
+          GoRoute(
+            path: AppRoutes.platform,
+            pageBuilder: (context, state) =>
+                inShell(state, const PlatformOverviewScreen()),
+          ),
+          GoRoute(
+            path: AppRoutes.platformOrg(':id'),
+            pageBuilder: (context, state) => inShell(
+              state,
+              PlatformOrgScreen(orgId: state.pathParameters['id']!),
+            ),
+          ),
+        ],
       ),
       ShellRoute(
         builder: (context, state, child) =>
@@ -353,6 +374,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 initialTo: parseIsoDate(state.uri.queryParameters['to']),
               ),
             ),
+          ),
+          GoRoute(
+            path: AppRoutes.myFace,
+            pageBuilder: (context, state) =>
+                inShell(state, const FaceSetupScreen()),
           ),
           GoRoute(
             path: AppRoutes.leaveHistory,

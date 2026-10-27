@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_names.dart';
 import '../../../../core/errors/failure.dart';
+import '../../../../core/permissions/permissions.dart';
 import '../../../../core/responsive/responsive_page.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -19,11 +20,13 @@ import '../../../../core/widgets/selection_controls.dart';
 import '../../../../core/widgets/skeleton.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../../../core/widgets/status_badge.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../auth/presentation/widgets/auth_widgets.dart';
 import '../../../organization/domain/branch.dart';
 import '../../../organization/presentation/providers/organization_providers.dart';
 import '../../domain/custom_field.dart';
 import '../../domain/employee.dart';
+import '../../domain/field_settings.dart';
 import '../providers/employee_providers.dart';
 import '../widgets/employee_widgets.dart';
 
@@ -185,6 +188,7 @@ class _FieldBuilderScreenState extends ConsumerState<FieldBuilderScreen> {
   @override
   Widget build(BuildContext context) {
     final fields = ref.watch(customFieldsProvider);
+    final canEdit = _canEdit(ref);
     final employees = ref.watch(employeesProvider).value ?? const <Employee>[];
     final branches = ref.watch(branchesProvider).value ?? const <Branch>[];
     return ResponsivePage(
@@ -214,16 +218,39 @@ class _FieldBuilderScreenState extends ConsumerState<FieldBuilderScreen> {
               const SizedBox(height: AppSpacing.md),
               PageHeader(
                 title: 'Employee fields',
-                subtitle: 'Drag to reorder how fields appear on forms.',
-                actions: [
-                  AppButton(
-                    label: 'New field',
-                    icon: Icons.add,
-                    onPressed: _newField,
-                  ),
-                ],
+                subtitle: canEdit
+                    ? 'Choose which fields are asked when people are added or edited, and in imports.'
+                    : 'Which fields are asked when people are added. You can view these settings.',
               ),
               const SizedBox(height: AppSpacing.lg),
+              StandardFieldsCard(canEdit: canEdit),
+              const SizedBox(height: AppSpacing.xl),
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: AppSpacing.md,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Custom fields', style: AppTypography.sectionTitle),
+                      Text(
+                        'Your own fields. Drag to reorder how they appear on forms.',
+                        style: AppTypography.small,
+                      ),
+                    ],
+                  ),
+                  if (canEdit)
+                    AppButton(
+                      label: 'New field',
+                      icon: Icons.add,
+                      onPressed: _newField,
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
               LayoutBuilder(
                 builder: (context, c) {
                   final listView = _FieldList(
@@ -304,18 +331,19 @@ class _FieldBuilderScreenState extends ConsumerState<FieldBuilderScreen> {
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.sm,
           children: [
-            if (!_isNew)
+            if (!_isNew && _canEdit(ref))
               AppButton(
                 label: d.archived ? 'Restore' : 'Archive',
                 variant: AppButtonVariant.secondary,
                 onPressed: _busy ? null : () => _save(archived: !d.archived),
               ),
-            AppButton(
-              label: 'Save field',
-              busy: _busy,
-              busyLabel: 'Saving…',
-              onPressed: _save,
-            ),
+            if (_canEdit(ref))
+              AppButton(
+                label: 'Save field',
+                busy: _busy,
+                busyLabel: 'Saving…',
+                onPressed: _save,
+              ),
           ],
         ),
       ),
@@ -855,6 +883,196 @@ class _Preview extends StatelessWidget {
                       : 'Employees see this as read-only on their profile.'),
             style: AppTypography.helper,
           ),
+        ],
+      ),
+    );
+  }
+}
+
+bool _canEdit(WidgetRef ref) =>
+    ref
+        .watch(sessionProvider)
+        ?.permissions
+        .can(PermissionModule.employeeFields, PermissionAction.edit) ??
+    false;
+
+/// D-73 — Required / Optional / Hidden for each built-in field. Core fields
+/// are locked as required.
+class StandardFieldsCard extends ConsumerStatefulWidget {
+  const StandardFieldsCard({super.key, required this.canEdit});
+
+  final bool canEdit;
+
+  @override
+  ConsumerState<StandardFieldsCard> createState() => _StandardFieldsCardState();
+}
+
+class _StandardFieldsCardState extends ConsumerState<StandardFieldsCard> {
+  EmployeeFieldSettings? _draft;
+  bool _busy = false;
+
+  Future<void> _save(EmployeeFieldSettings draft) async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(fieldSettingsProvider.notifier).save(draft);
+      if (!mounted) return;
+      setState(() => _draft = null);
+      showAppToast(context, 'Field settings saved · logged in the audit trail');
+    } on Failure catch (f) {
+      if (mounted) showAppToast(context, f.message, icon: Icons.error_outline);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final saved = ref.watch(fieldSettingsProvider);
+    if (saved.isLoading) return const SkeletonBox(height: 240);
+    if (saved.hasError) {
+      return ErrorState(
+        message: userMessageFor(saved.error!),
+        onRetry: () => ref.invalidate(fieldSettingsProvider),
+      );
+    }
+    final current = _draft ?? saved.value!;
+    final dirty = _draft != null && _draft != saved.value;
+    final sections = {for (final f in StandardField.values) f.section};
+
+    return AppCard(
+      header: CardHeader(
+        title: 'Built-in fields',
+        subtitle:
+            '${current.count(FieldRule.required)} required · ${current.count(FieldRule.optional)} optional · ${current.count(FieldRule.hidden)} hidden',
+        trailing: !widget.canEdit
+            ? const StatusBadge(label: 'View only', tone: StatusTone.neutral)
+            : null,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final section in sections) ...[
+            Padding(
+              padding: const EdgeInsets.only(
+                top: AppSpacing.md,
+                bottom: AppSpacing.xs,
+              ),
+              child: Text(section.toUpperCase(), style: AppTypography.helper),
+            ),
+            for (final f in StandardField.values.where(
+              (f) => f.section == section,
+            ))
+              _StandardFieldRow(
+                field: f,
+                rule: current.ruleOf(f),
+                changed: dirty && current.ruleOf(f) != saved.value!.ruleOf(f),
+                onChanged: widget.canEdit && !_busy
+                    ? (r) => setState(() => _draft = current.withRule(f, r))
+                    : null,
+              ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          const Text(
+            'Hidden fields aren’t asked on the add and edit forms or in imports; values already saved are kept. Required fields must be filled before saving.',
+            style: AppTypography.helper,
+          ),
+          if (dirty) ...[
+            const SizedBox(height: AppSpacing.md),
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                AppButton(
+                  label: 'Discard',
+                  variant: AppButtonVariant.secondary,
+                  onPressed: _busy ? null : () => setState(() => _draft = null),
+                ),
+                AppButton(
+                  label: 'Save field settings',
+                  busy: _busy,
+                  onPressed: () => _save(current),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _StandardFieldRow extends StatelessWidget {
+  const _StandardFieldRow({
+    required this.field,
+    required this.rule,
+    required this.changed,
+    required this.onChanged,
+  });
+
+  final StandardField field;
+  final FieldRule rule;
+  final bool changed;
+  final ValueChanged<FieldRule>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget control;
+    if (field.locked) {
+      control = const Text.rich(
+        TextSpan(
+          children: [
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Icon(
+                Icons.lock_outline,
+                size: 14,
+                color: AppColors.textMuted,
+              ),
+            ),
+            TextSpan(text: ' Always required'),
+          ],
+        ),
+        style: AppTypography.small,
+      );
+    } else if (onChanged == null) {
+      control = Text(rule.label, style: AppTypography.label);
+    } else {
+      control = Semantics(
+        label: '${field.label} rule',
+        child: ChoiceChips<FieldRule>(
+          options: [for (final r in field.allowed) (r, r.label)],
+          selected: rule,
+          onSelected: onChanged!,
+        ),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.divider)),
+      ),
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: AppSpacing.md,
+        runSpacing: AppSpacing.xs,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 180, maxWidth: 360),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  changed ? '${field.label} · changed' : field.label,
+                  style: AppTypography.body,
+                ),
+                if (field.note case final note?)
+                  Text(note, style: AppTypography.helper),
+              ],
+            ),
+          ),
+          control,
         ],
       ),
     );

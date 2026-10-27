@@ -132,7 +132,13 @@ class ReportService {
             branchId: f.branchId,
           ),
         );
-    download(saved, log: false);
+    try {
+      await download(saved, log: false);
+    } on Object {
+      throw const UnexpectedFailure(
+        'The export is ready in Export history, but the file couldn’t be saved here. Try Download there.',
+      );
+    }
     await ref
         .read(auditRecorderProvider)
         .record(
@@ -149,21 +155,23 @@ class ReportService {
     return saved;
   }
 
-  /// Saves the file again; every download is logged (board S75).
-  void download(ExportRecord r, {bool log = true}) {
+  /// Saves the file again; every completed download is logged (board
+  /// S75). False when cancelled; throws when the file can't be written.
+  Future<bool> download(ExportRecord r, {bool log = true}) async {
     final bytes = r.bytes;
-    if (bytes == null) return;
+    if (bytes == null) return false;
     final name =
         '${r.kind.name}_${r.at.year}${r.at.month.toString().padLeft(2, '0')}${r.at.day.toString().padLeft(2, '0')}.${r.format.toLowerCase()}';
-    ref
+    final saved = await ref
         .read(fileDownloadsProvider)
         .save(
           name,
           bytes,
           mimeType: r.format == 'CSV' ? csvMimeType : xlsxMimeType,
         );
+    if (!saved) return false;
     if (log) {
-      ref
+      await ref
           .read(auditRecorderProvider)
           .record(
             action: 'report.download',
@@ -174,5 +182,6 @@ class ReportService {
             summary: 'Downloaded ${r.kind.label} (${r.filters})',
           );
     }
+    return true;
   }
 }

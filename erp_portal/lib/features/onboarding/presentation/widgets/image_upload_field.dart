@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/errors/failure.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -38,7 +39,13 @@ class _ImageUploadFieldState extends ConsumerState<ImageUploadField> {
   String? _error;
 
   Future<void> _pick() async {
-    final picked = await ref.read(imagePickingProvider).pickImage();
+    final PickedImage? picked;
+    try {
+      picked = await ref.read(imagePickingProvider).pickImage();
+    } on Failure catch (f) {
+      if (mounted) setState(() => _error = f.message);
+      return;
+    }
     if (picked == null || !mounted) return;
     final error = validateImage(picked);
     setState(() => _error = error);

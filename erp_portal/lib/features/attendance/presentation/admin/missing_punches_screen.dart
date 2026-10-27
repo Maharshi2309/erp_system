@@ -77,6 +77,9 @@ class _MissingPunchesScreenState extends ConsumerState<MissingPunchesScreen> {
       current: AppRoutes.missingPunches,
       body: (context, scope) {
         final book = scope.book;
+        final canOpenProfiles = scope.session.permissions.canView(
+          PermissionModule.employees,
+        );
         final canCorrect = scope.session.permissions.can(
           PermissionModule.attendance,
           PermissionAction.correct,
@@ -131,7 +134,8 @@ class _MissingPunchesScreenState extends ConsumerState<MissingPunchesScreen> {
                     ),
                   ),
                 ),
-                for (final r in items) _row(context, book, r, canCorrect),
+                for (final r in items)
+                  _row(context, book, r, canCorrect, canOpenProfiles),
               ],
             ),
           ),
@@ -213,6 +217,7 @@ class _MissingPunchesScreenState extends ConsumerState<MissingPunchesScreen> {
     AttendanceBook book,
     DayRecord r,
     bool canCorrect,
+    bool canOpenProfiles,
   ) {
     final request = book.openRequest(r.employee, r.date);
     final reminder = book.lastReminder(r.employee, r.date);
@@ -283,11 +288,18 @@ class _MissingPunchesScreenState extends ConsumerState<MissingPunchesScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      TextLink(
-                        r.employee.fullName,
-                        onTap: () =>
-                            context.go(AppRoutes.employee(r.employee.id)),
-                      ),
+                      // A link only for roles that may open profiles.
+                      if (canOpenProfiles)
+                        TextLink(
+                          r.employee.fullName,
+                          onTap: () =>
+                              context.go(AppRoutes.employee(r.employee.id)),
+                        )
+                      else
+                        Text(
+                          r.employee.fullName,
+                          style: AppTypography.bodyStrong,
+                        ),
                       Text(
                         '${r.employee.code} · ${book.branchOf(r.employee)?.name ?? ''}',
                         style: AppTypography.helper,

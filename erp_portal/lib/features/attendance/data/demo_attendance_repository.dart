@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../../../core/errors/failure.dart';
 import '../../../core/permissions/system_roles.dart';
 import '../../../core/utils/demo_random.dart';
@@ -17,6 +19,7 @@ class DemoAttendanceRepository implements AttendanceRepository {
     this.latency = const Duration(milliseconds: 500),
     required DateTime Function() clock,
     this.wallClock,
+    this.faceOutcome,
   }) : _clock = clock; // ignore: prefer_initializing_formals
 
   final Duration latency;
@@ -29,6 +32,11 @@ class DemoAttendanceRepository implements AttendanceRepository {
 
   /// Tests set this to simulate a lost connection on the next punch.
   bool failNextPunch = false;
+
+  /// DEMO ONLY — what the simulated face matcher answers for an enrolled
+  /// person (picked on the selfie screen in demo builds). The real server
+  /// compares the selfie with the enrolled face and checks liveness.
+  final FaceResult Function()? faceOutcome;
 
   final _data = <String, _OrgData>{};
   int _nextId = 1;
@@ -322,6 +330,9 @@ class DemoAttendanceRepository implements AttendanceRepository {
       corrections: List.unmodifiable(org.corrections),
       requests: List.unmodifiable(org.requests),
       reminders: List.unmodifiable(org.reminders),
+      faceProfiles: List.unmodifiable(org.faces.values),
+      faceReviews: List.unmodifiable(org.reviews.values),
+      faceExemptions: List.unmodifiable(org.exemptions.values),
     );
   }
 
@@ -332,6 +343,7 @@ class DemoAttendanceRepository implements AttendanceRepository {
     required PunchKind kind,
     required PunchSource source,
     required String requestId,
+    Uint8List? selfie,
   }) async {
     await _delay();
     final org = _org(organizationId);
@@ -365,10 +377,147 @@ class DemoAttendanceRepository implements AttendanceRepository {
       at: now,
       kind: kind,
       source: source,
+      face: selfie == null ? null : _match(org, employeeId, selfie),
     );
     org.punches.add(p);
     org.byRequest[requestId] = p;
     return p;
+  }
+
+  FaceCheck _match(_OrgData org, String employeeId, Uint8List selfie) {
+    final profile = org.faces[employeeId];
+    final result = selfie.isEmpty
+        ? FaceResult.noFace
+        : profile?.status != FaceEnrolStatus.approved
+        ? FaceResult.notEnrolled
+        : faceOutcome?.call() ?? FaceResult.verified;
+    return FaceCheck(
+      result: result,
+      score: switch (result) {
+        FaceResult.verified => 0.94,
+        FaceResult.notMatched => 0.41,
+        _ => null,
+      },
+      photo: selfie,
+    );
+  }
+
+  @override
+  Future<FaceProfile> enrolFace(
+    String organizationId, {
+    required String employeeId,
+    required List<Uint8List> photos,
+  }) async {
+    await _delay();
+    if (photos.length < 3 || photos.any((p) => p.isEmpty)) {
+      throw const ValidationFailure('Take all three photos.');
+    }
+    final now = _clock();
+    return _org(organizationId).faces[employeeId] = FaceProfile(
+      employeeId: employeeId,
+      status: FaceEnrolStatus.pending,
+      photos: List.unmodifiable(photos),
+      consentAt: now,
+      submittedAt: now,
+    );
+  }
+
+  @override
+  Future<FaceProfile> decideFace(
+    String organizationId,
+    String employeeId, {
+    required bool approve,
+    required String by,
+    String reason = '',
+  }) async {
+    await _delay();
+    final org = _org(organizationId);
+    final f = org.faces[employeeId];
+    if (f == null) throw const NotFoundFailure();
+    if (f.status != FaceEnrolStatus.pending) {
+      throw const ConflictFailure('This enrolment was already decided.');
+    }
+    if (!approve && reason.trim().length < 3) {
+      throw const ValidationFailure(
+        'Give a reason the employee will see.',
+        fieldErrors: {'reason': 'Enter at least 3 characters.'},
+      );
+    }
+    return org.faces[employeeId] = FaceProfile(
+      employeeId: employeeId,
+      status: approve ? FaceEnrolStatus.approved : FaceEnrolStatus.rejected,
+      photos: f.photos,
+      consentAt: f.consentAt,
+      submittedAt: f.submittedAt,
+      decidedBy: by,
+      decidedAt: _clock(),
+      rejectReason: approve ? '' : reason.trim(),
+    );
+  }
+
+  @override
+  Future<void> deleteFace(String organizationId, String employeeId) async {
+    await _delay();
+    _org(organizationId).faces.remove(employeeId);
+  }
+
+  @override
+  Future<void> setFaceExemption(
+    String organizationId,
+    String employeeId, {
+    required String? reason,
+    required String by,
+  }) async {
+    await _delay();
+    final org = _org(organizationId);
+    if (reason == null) {
+      org.exemptions.remove(employeeId);
+      return;
+    }
+    if (reason.trim().length < 3) {
+      throw const ValidationFailure(
+        'Give a reason.',
+        fieldErrors: {'reason': 'Enter at least 3 characters.'},
+      );
+    }
+    org.exemptions[employeeId] = FaceExemption(
+      employeeId: employeeId,
+      reason: reason.trim(),
+      by: by,
+      at: _clock(),
+    );
+  }
+
+  @override
+  Future<FaceReview> reviewFacePunch(
+    String organizationId,
+    String punchId, {
+    required bool accept,
+    required String by,
+    String note = '',
+  }) async {
+    await _delay();
+    final org = _org(organizationId);
+    final p = org.punches.where((p) => p.id == punchId).firstOrNull;
+    if (p == null || p.face?.needsReview != true) {
+      throw const NotFoundFailure();
+    }
+    if (org.reviews.containsKey(punchId)) {
+      throw const ConflictFailure('Someone already reviewed this punch.');
+    }
+    if (!accept && note.trim().length < 3) {
+      throw const ValidationFailure(
+        'Give a reason the employee will see.',
+        fieldErrors: {'note': 'Enter at least 3 characters.'},
+      );
+    }
+    return org.reviews[punchId] = FaceReview(
+      punchId: punchId,
+      accepted: accept,
+      by: by,
+      at: _clock(),
+      note: note.trim(),
+    );
   }
 
   @override
@@ -506,4 +655,7 @@ class _OrgData {
   final requests = <CorrectionRequest>[];
   final reminders = <PunchReminder>[];
   final byRequest = <String, Punch>{};
+  final faces = <String, FaceProfile>{};
+  final reviews = <String, FaceReview>{};
+  final exemptions = <String, FaceExemption>{};
 }

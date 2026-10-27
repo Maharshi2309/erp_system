@@ -83,6 +83,7 @@ class _BranchBasicsScreenState extends ConsumerState<BranchBasicsScreen> {
       city: _city.text,
       pin: _pin.text,
       email: _email.text,
+      phone: _phone.text,
       hours: _hours,
       otherBranchNames: others.map((b) => b.name),
     );
@@ -369,6 +370,7 @@ class _BranchBasicsScreenState extends ConsumerState<BranchBasicsScreen> {
             controller: _phone,
             monospace: true,
             keyboardType: TextInputType.phone,
+            errorText: _errors['phone'],
           ),
           const SizedBox(height: AppSpacing.lg),
           AppTextField(

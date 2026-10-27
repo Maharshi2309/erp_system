@@ -2,6 +2,7 @@ import 'package:erp_portal/app/router/app_router.dart';
 import 'package:erp_portal/app/router/route_names.dart';
 import 'package:erp_portal/core/permissions/permissions.dart';
 import 'package:erp_portal/core/permissions/system_roles.dart';
+import 'package:erp_portal/core/utils/validators.dart';
 import 'package:erp_portal/core/widgets/app_button.dart';
 import 'package:erp_portal/features/audit/presentation/audit_providers.dart';
 import 'package:erp_portal/features/auth/data/demo_auth_repository.dart';
@@ -19,6 +20,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../test_helpers/pump_app.dart';
+
+/// Scrolls to and taps a control by its accessible label.
+Future<void> tapSemantics(WidgetTester tester, String label) async {
+  final f = find.bySemanticsLabel(label);
+  await tester.ensureVisible(f);
+  await tester.pumpAndSettle();
+  await tester.tap(f);
+  await tester.pumpAndSettle();
+}
 
 /// Confirms the "Confirm it’s you" password dialog.
 Future<void> confirmPassword(WidgetTester tester) async {
@@ -39,10 +49,9 @@ void main() {
         size: const Size(1440, 1600),
       );
       expect(find.text('Branch Manager'), findsWidgets);
-      await tester.tap(find.bySemanticsLabel('Leave: Approve'));
-      await tester.pumpAndSettle();
+      await tapSemantics(tester, 'Leave: Approve or reject leave');
       expect(find.text('1 unsaved change'), findsOneWidget);
-      expect(find.text('− Leave · Approve'), findsOneWidget);
+      expect(find.text('− Approve or reject leave'), findsOneWidget);
       await tapText(tester, 'Review & save');
       await enter(tester, 'Reason', 'Approvals move to HR this quarter');
       await tapText(tester, 'Save changes');
@@ -73,8 +82,7 @@ void main() {
         location: AppRoutes.role('branchManager'),
         size: const Size(1440, 1600),
       );
-      await tester.tap(find.bySemanticsLabel('Holidays: View'));
-      await tester.pumpAndSettle();
+      await tapSemantics(tester, 'Holidays & schedules: No access');
       await tapText(tester, 'Review & save');
       await tapText(tester, 'Save changes');
       await confirmPassword(tester);
@@ -89,8 +97,7 @@ void main() {
         location: AppRoutes.role('branchManager'),
         size: const Size(1440, 1600),
       );
-      await tester.tap(find.bySemanticsLabel('Leave: Approve'));
-      await tester.pumpAndSettle();
+      await tapSemantics(tester, 'Leave: Approve or reject leave');
       await tapText(tester, 'Review & save');
       await tapText(tester, 'Save changes');
       await enter(tester, 'Password', 'wrong-password');
@@ -579,10 +586,7 @@ void main() {
       await tapText(tester, 'Edit');
       await enter(tester, 'Mobile', '12');
       await tapText(tester, 'Save');
-      expect(
-        find.text('Enter a 10-digit mobile number, with or without +91.'),
-        findsOneWidget,
-      );
+      expect(find.text(Validators.mobileMessage), findsOneWidget);
       await enter(tester, 'Mobile', '+91 98790 11111');
       await tapText(tester, 'Save');
       expect(find.text('Contact details saved'), findsOneWidget);

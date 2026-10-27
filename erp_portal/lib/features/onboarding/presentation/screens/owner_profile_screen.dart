@@ -10,6 +10,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/initials.dart';
+import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_overlays.dart';
 import '../../../../core/widgets/app_text_field.dart';
@@ -69,11 +70,13 @@ class _OwnerProfileScreenState extends ConsumerState<OwnerProfileScreen> {
 
   Future<void> _save() async {
     if (_busy) return;
-    final digits = _phone.text.replaceAll(RegExp(r'\D'), '');
     final errors = {
-      if (_name.text.trim().isEmpty) 'name': 'Enter your full name.',
-      if (digits.isNotEmpty && (digits.length < 10 || digits.length > 12))
-        'phone': 'Enter a 10-digit mobile number, with or without +91.',
+      if (_name.text.trim().isEmpty)
+        'name': 'Enter your full name.'
+      else if (!Validators.isPersonName(_name.text, max: 80))
+        'name': Validators.nameMessage,
+      if (_phone.text.trim().isNotEmpty && !Validators.isMobile(_phone.text))
+        'phone': Validators.mobileMessage,
     };
     setState(() => _errors = errors);
     if (errors.isNotEmpty) return;

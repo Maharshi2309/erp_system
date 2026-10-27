@@ -1,11 +1,11 @@
 {
-    "name": "erp_portal",
-    "short_name": "erp_portal",
+    "name": "Staffline",
+    "short_name": "Staffline",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#F5F6F8",
+    "theme_color": "#2B4ACB",
+    "description": "Attendance, leave and people for your organization.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

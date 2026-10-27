@@ -237,6 +237,14 @@ const attendanceManagerDestinations = <AppDestination>[
     phase: 5,
     module: PermissionModule.attendance,
   ),
+  AppDestination(
+    label: 'Face check',
+    icon: Icons.face_retouching_natural_outlined,
+    path: AppRoutes.faceCheck,
+    screenId: 'D-70',
+    phase: 9,
+    module: PermissionModule.attendance,
+  ),
 ];
 
 /// Employee self-service: phone bottom tabs (board S86) and, on wider

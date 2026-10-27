@@ -437,11 +437,20 @@ class _CorrectionScreenState extends ConsumerState<CorrectionScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            TextLink(
-                              employee.fullName,
-                              onTap: () =>
-                                  context.go(AppRoutes.employee(employee.id)),
-                            ),
+                            // A link only for roles that may open profiles.
+                            if (scope.session.permissions.canView(
+                              PermissionModule.employees,
+                            ))
+                              TextLink(
+                                employee.fullName,
+                                onTap: () =>
+                                    context.go(AppRoutes.employee(employee.id)),
+                              )
+                            else
+                              Text(
+                                employee.fullName,
+                                style: AppTypography.bodyStrong,
+                              ),
                             Text(
                               '${employee.code} · ${employee.designation}',
                               style: AppTypography.helper,

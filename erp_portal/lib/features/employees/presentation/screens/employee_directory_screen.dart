@@ -27,6 +27,7 @@ import '../../data/employee_files.dart';
 import '../../data/spreadsheet.dart';
 import '../../domain/employee.dart';
 import '../../domain/employee_query.dart';
+import '../../domain/field_settings.dart';
 import '../providers/employee_providers.dart';
 import '../widgets/employee_widgets.dart';
 
@@ -114,14 +115,21 @@ class _EmployeeDirectoryScreenState
 
   void _downloadTemplate() {
     final fields = ref.read(customFieldsProvider).value ?? const [];
-    ref
-        .read(fileDownloadsProvider)
-        .save(
-          'staffline_employee_template.xlsx',
-          buildXlsx('Employees', templateRows(fields)),
-          mimeType: xlsxMimeType,
-        );
-    showAppToast(context, 'Template downloaded');
+    startDownload(
+      context,
+      ref,
+      'staffline_employee_template.xlsx',
+      buildXlsx(
+        'Employees',
+        templateRows(
+          fields,
+          ref.read(fieldSettingsProvider).value ??
+              const EmployeeFieldSettings(),
+        ),
+      ),
+      mimeType: xlsxMimeType,
+      done: 'Template downloaded',
+    );
   }
 
   void _export(List<Employee> rows) {
@@ -138,10 +146,14 @@ class _EmployeeDirectoryScreenState
             _can(PermissionModule.employees, PermissionAction.edit),
       ),
     );
-    ref
-        .read(fileDownloadsProvider)
-        .save('employees.xlsx', bytes, mimeType: xlsxMimeType);
-    showAppToast(context, 'Exported ${rows.length} people');
+    startDownload(
+      context,
+      ref,
+      'employees.xlsx',
+      bytes,
+      mimeType: xlsxMimeType,
+      done: 'Exported ${rows.length} people',
+    );
   }
 
   Future<void> _resendInvites(List<String> ids) async {
@@ -250,9 +262,9 @@ class _EmployeeDirectoryScreenState
       PermissionModule.importExport,
       PermissionAction.create,
     );
-    final canManageFields = session.permissions.can(
-      PermissionModule.settings,
-      PermissionAction.edit,
+    // Anyone given the Employee fields permission (D-73).
+    final canManageFields = session.permissions.canView(
+      PermissionModule.employeeFields,
     );
     final visibleBranches = [
       for (final b in branches)

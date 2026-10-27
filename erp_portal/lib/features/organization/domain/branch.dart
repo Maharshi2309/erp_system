@@ -109,6 +109,7 @@ class AttendanceRules {
     this.earlyLeaveMinutes = 30,
     this.halfDayLateMinutes = 120,
     this.shiftMode = ShiftMode.branchHours,
+    this.selfieCheck = false,
   });
 
   final PunchMethod method;
@@ -117,18 +118,24 @@ class AttendanceRules {
   final int halfDayLateMinutes;
   final ShiftMode shiftMode;
 
+  /// Employees take a selfie with each punch, matched to their enrolled
+  /// face (D-70).
+  final bool selfieCheck;
+
   AttendanceRules copyWith({
     PunchMethod? method,
     int? graceMinutes,
     int? earlyLeaveMinutes,
     int? halfDayLateMinutes,
     ShiftMode? shiftMode,
+    bool? selfieCheck,
   }) => AttendanceRules(
     method: method ?? this.method,
     graceMinutes: graceMinutes ?? this.graceMinutes,
     earlyLeaveMinutes: earlyLeaveMinutes ?? this.earlyLeaveMinutes,
     halfDayLateMinutes: halfDayLateMinutes ?? this.halfDayLateMinutes,
     shiftMode: shiftMode ?? this.shiftMode,
+    selfieCheck: selfieCheck ?? this.selfieCheck,
   );
 
   static const maxGrace = 120;

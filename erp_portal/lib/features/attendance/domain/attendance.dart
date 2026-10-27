@@ -34,6 +34,7 @@ class Punch {
     required this.source,
     this.correctionId,
     this.replaces,
+    this.face,
   });
 
   final String id;
@@ -49,6 +50,111 @@ class Punch {
 
   /// The original event this one replaces (a moved time).
   final String? replaces;
+
+  /// The selfie check, when the branch asks for one (D-70).
+  final FaceCheck? face;
+}
+
+/// What the server concluded from a punch selfie.
+enum FaceResult {
+  verified('Face verified'),
+  notMatched('Face didn’t match'),
+  noFace('No face found'),
+  notEnrolled('Face not set up');
+
+  const FaceResult(this.label);
+
+  final String label;
+}
+
+/// A punch selfie and its result. Anything but [FaceResult.verified] is
+/// saved and waits for a reviewer (D-70).
+@immutable
+class FaceCheck {
+  const FaceCheck({required this.result, this.score, this.photo});
+
+  final FaceResult result;
+
+  /// Similarity 0–1 from the matcher, when a face was compared.
+  final double? score;
+
+  /// The selfie (JPEG). Shown only to reviewers and the employee.
+  final Uint8List? photo;
+
+  bool get needsReview => result != FaceResult.verified;
+}
+
+/// A reviewer's decision on a punch whose face wasn't verified. A rejected
+/// punch no longer counts; the day then shows its missing punch.
+@immutable
+class FaceReview {
+  const FaceReview({
+    required this.punchId,
+    required this.accepted,
+    required this.by,
+    required this.at,
+    this.note = '',
+  });
+
+  final String punchId;
+  final bool accepted;
+  final String by;
+  final DateTime at;
+  final String note;
+}
+
+enum FaceEnrolStatus {
+  pending('Waiting for HR approval'),
+  approved('Set up'),
+  rejected('Not approved');
+
+  const FaceEnrolStatus(this.label);
+
+  final String label;
+}
+
+/// An employee's reference face for selfie punches. Given with consent and
+/// approved by HR; the employee can delete it at any time (D-71).
+@immutable
+class FaceProfile {
+  const FaceProfile({
+    required this.employeeId,
+    required this.status,
+    required this.photos,
+    required this.consentAt,
+    required this.submittedAt,
+    this.decidedBy,
+    this.decidedAt,
+    this.rejectReason = '',
+  });
+
+  final String employeeId;
+  final FaceEnrolStatus status;
+
+  /// The enrolment selfies (JPEG): straight, slightly left, slightly right.
+  final List<Uint8List> photos;
+  final DateTime consentAt;
+  final DateTime submittedAt;
+  final String? decidedBy;
+  final DateTime? decidedAt;
+  final String rejectReason;
+}
+
+/// Someone in a selfie branch who punches without a selfie (e.g. no phone
+/// camera). Set by HR with a reason.
+@immutable
+class FaceExemption {
+  const FaceExemption({
+    required this.employeeId,
+    required this.reason,
+    required this.by,
+    required this.at,
+  });
+
+  final String employeeId;
+  final String reason;
+  final String by;
+  final DateTime at;
 }
 
 enum CorrectionStatus {
@@ -195,10 +301,31 @@ class AttendanceData {
     this.corrections = const [],
     this.requests = const [],
     this.reminders = const [],
+    this.faceProfiles = const [],
+    this.faceReviews = const [],
+    this.faceExemptions = const [],
   });
 
   final List<Punch> punches;
   final List<Correction> corrections;
   final List<CorrectionRequest> requests;
   final List<PunchReminder> reminders;
+  final List<FaceProfile> faceProfiles;
+  final List<FaceReview> faceReviews;
+  final List<FaceExemption> faceExemptions;
+
+  FaceProfile? faceProfileOf(String employeeId) =>
+      faceProfiles.where((f) => f.employeeId == employeeId).firstOrNull;
+
+  FaceReview? reviewOf(String punchId) =>
+      faceReviews.where((r) => r.punchId == punchId).firstOrNull;
+
+  bool isFaceExempt(String employeeId) =>
+      faceExemptions.any((x) => x.employeeId == employeeId);
+
+  /// Selfie punches still waiting for a reviewer.
+  List<Punch> get punchesToReview => [
+    for (final p in punches)
+      if (p.face?.needsReview == true && reviewOf(p.id) == null) p,
+  ];
 }

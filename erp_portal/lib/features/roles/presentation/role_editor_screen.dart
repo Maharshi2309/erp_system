@@ -7,6 +7,7 @@ import '../../../app/router/route_names.dart';
 import '../../../core/errors/failure.dart';
 import '../../../core/permissions/permissions.dart';
 import '../../../core/permissions/system_roles.dart';
+import '../../../core/responsive/responsive_grid.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -20,7 +21,9 @@ import '../../../core/widgets/state_views.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../auth/presentation/widgets/confirm_password_dialog.dart';
 import '../domain/access.dart';
+import '../domain/access_levels.dart';
 import 'access_providers.dart';
+import 'access_widgets.dart';
 import 'roles_section.dart';
 
 /// Boards S68 (desktop matrix) and S69 (phone sections) — view, create or
@@ -45,6 +48,9 @@ class _RoleEditorScreenState extends ConsumerState<RoleEditorScreen> {
   final _description = TextEditingController();
   Map<String, String> _errors = const {};
   bool _busy = false;
+
+  /// Power users can switch to the full checkbox table.
+  bool _detailed = false;
 
   @override
   void dispose() {
@@ -125,7 +131,7 @@ class _RoleEditorScreenState extends ConsumerState<RoleEditorScreen> {
       builder: (_) => _ReviewDialog(
         diff: _diff,
         scopeChange: _saved != null && _saved!.scope != role.scope
-            ? '${scopeLabelOf(_saved!.scope)} → ${scopeLabelOf(role.scope)}'
+            ? '${scopeQuestionLabel(_saved!.scope)} → ${scopeQuestionLabel(role.scope)}'
             : null,
         holders: _saved == null ? const [] : holders,
         isNew: _saved == null,
@@ -208,7 +214,7 @@ class _RoleEditorScreenState extends ConsumerState<RoleEditorScreen> {
                   ),
                   Text(
                     isNew
-                        ? 'Works like ${role.base.label} · set what it can do below'
+                        ? 'Menu like ${role.base.label} · choose what it can do below'
                         : [
                             role.isSystem ? 'System role' : 'Custom role',
                             'assigned to ${holders.length} ${holders.length == 1 ? 'person' : 'people'}',
@@ -320,9 +326,9 @@ class _RoleEditorScreenState extends ConsumerState<RoleEditorScreen> {
               const SizedBox(height: AppSpacing.md),
               if (isNew)
                 AppDropdownField<SystemRole>(
-                  label: 'Works like',
+                  label: 'Menu and home page like',
                   helperText:
-                      'Sets the menu and home page. Permissions below decide what it can do.',
+                      'Which screens they start on. What they may do is chosen below.',
                   value: role.base,
                   errorText: _errors['base'],
                   options: [
@@ -335,7 +341,7 @@ class _RoleEditorScreenState extends ConsumerState<RoleEditorScreen> {
                 )
               else
                 Text(
-                  'Works like ${role.base.label}',
+                  'Menu and home page like ${role.base.label}',
                   style: AppTypography.small,
                 ),
               const SizedBox(height: AppSpacing.md),
@@ -351,27 +357,22 @@ class _RoleEditorScreenState extends ConsumerState<RoleEditorScreen> {
             ],
             Semantics(
               header: true,
-              child: const Text('Data scope', style: AppTypography.cardTitle),
+              child: const Text(
+                'Whose information can they see?',
+                style: AppTypography.cardTitle,
+              ),
             ),
             const Text(
-              'Which records this role can reach',
+              'This limits every list, report and download for this role.',
               style: AppTypography.helper,
             ),
             const SizedBox(height: AppSpacing.sm),
-            for (final (s, hint) in const [
-              (DataScope.organization, 'Every branch and employee'),
-              (
-                DataScope.assignedBranches,
-                'Set per person when assigning the role',
-              ),
-              (DataScope.ownTeam, 'People who report to them'),
-              (DataScope.ownRecords, 'Self-service access'),
-            ])
+            for (final s in DataScope.values)
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                 child: OptionCard(
-                  title: scopeLabelOf(s),
-                  description: hint,
+                  title: scopeQuestionLabel(s),
+                  description: scopeQuestionHint(s),
                   selected: role.scope == s,
                   onTap: () {
                     if (!readOnly) {
@@ -384,26 +385,101 @@ class _RoleEditorScreenState extends ConsumerState<RoleEditorScreen> {
         ),
       );
 
-      final matrix = LayoutBuilder(
-        builder: (context, c) => c.maxWidth >= 720
-            ? _Matrix(
-                role: role,
-                saved: _saved,
-                readOnly: readOnly,
-                onToggle: _toggle,
-                error: _errors['grants'],
-              )
-            : _Sections(
-                role: role,
-                saved: _saved,
-                readOnly: readOnly,
-                onToggle: _toggle,
+      void setGrants(PermissionSet g) =>
+          setState(() => _draft = _draft!.copyWith(grants: g));
+      final areas = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.sm,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Semantics(
+                    header: true,
+                    child: const Text(
+                      'What can they do?',
+                      style: AppTypography.sectionTitle,
+                    ),
+                  ),
+                  const Text(
+                    'Pick a level for each area. Fine-tune only if you need to.',
+                    style: AppTypography.helper,
+                  ),
+                ],
               ),
+              TextButton.icon(
+                onPressed: () => setState(() => _detailed = !_detailed),
+                icon: Icon(
+                  _detailed
+                      ? Icons.view_agenda_outlined
+                      : Icons.table_chart_outlined,
+                ),
+                label: Text(
+                  _detailed ? 'Show simple view' : 'Show detailed table',
+                ),
+              ),
+            ],
+          ),
+          if (_errors['grants'] != null)
+            Text(
+              _errors['grants']!,
+              style: AppTypography.small.copyWith(color: AppColors.danger),
+            ),
+          const SizedBox(height: AppSpacing.md),
+          if (!_detailed)
+            ResponsiveGrid(
+              minItemWidth: 340,
+              maxColumns: 2,
+              children: [
+                for (final m in PermissionModule.values)
+                  AccessAreaCard(
+                    module: m,
+                    grants: role.grants,
+                    saved: _saved?.grants,
+                    readOnly: readOnly,
+                    onChanged: setGrants,
+                  ),
+              ],
+            ),
+        ],
       );
+
+      final matrix = !_detailed
+          ? areas
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                areas,
+                LayoutBuilder(
+                  builder: (context, c) => c.maxWidth >= 720
+                      ? _Matrix(
+                          role: role,
+                          saved: _saved,
+                          readOnly: readOnly,
+                          onToggle: _toggle,
+                          error: _errors['grants'],
+                        )
+                      : _Sections(
+                          role: role,
+                          saved: _saved,
+                          readOnly: readOnly,
+                          onToggle: _toggle,
+                        ),
+                ),
+              ],
+            );
 
       final side = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          PlainSummaryCard(role: role),
+          const SizedBox(height: AppSpacing.lg),
           if (!readOnly && !isNew && changes > 0) ...[
             AppCard(
               header: const CardHeader(title: 'Pending changes'),
@@ -412,21 +488,21 @@ class _RoleEditorScreenState extends ConsumerState<RoleEditorScreen> {
                 children: [
                   for (final p in _diff.added)
                     Text(
-                      '+ ${permissionLabel(p)}',
+                      '+ ${abilitySentence(p)}',
                       style: AppTypography.small.copyWith(
                         color: AppColors.successText,
                       ),
                     ),
                   for (final p in _diff.removed)
                     Text(
-                      '− ${permissionLabel(p)}',
+                      '− ${abilitySentence(p)}',
                       style: AppTypography.small.copyWith(
                         color: AppColors.danger,
                       ),
                     ),
                   if (_saved!.scope != role.scope)
                     Text(
-                      'Scope: ${scopeLabelOf(role.scope)}',
+                      'Sees: ${scopeQuestionLabel(role.scope)}',
                       style: AppTypography.small,
                     ),
                   const SizedBox(height: AppSpacing.sm),
@@ -539,7 +615,7 @@ class _Matrix extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      header: const CardHeader(title: 'Permissions'),
+      header: const CardHeader(title: 'Detailed table'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -803,14 +879,17 @@ class _ReviewDialogState extends State<_ReviewDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               for (final p in d.added)
-                Text('+ ${permissionLabel(p)}', style: AppTypography.small),
-              for (final p in d.removed)
-                Text('− ${permissionLabel(p)}', style: AppTypography.small),
-              if (widget.scopeChange != null)
                 Text(
-                  'Scope: ${widget.scopeChange}',
+                  '+ Can now: ${abilitySentence(p)}',
                   style: AppTypography.small,
                 ),
+              for (final p in d.removed)
+                Text(
+                  '− No longer: ${abilitySentence(p)}',
+                  style: AppTypography.small,
+                ),
+              if (widget.scopeChange != null)
+                Text('Sees: ${widget.scopeChange}', style: AppTypography.small),
               const SizedBox(height: AppSpacing.md),
               if (widget.holders.isNotEmpty)
                 Text(

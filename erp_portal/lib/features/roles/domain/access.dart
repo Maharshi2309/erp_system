@@ -21,6 +21,10 @@ const applicableActions = <PermissionModule, Set<PermissionAction>>{
     PermissionAction.deactivate,
     PermissionAction.export,
   },
+  PermissionModule.employeeFields: {
+    PermissionAction.view,
+    PermissionAction.edit,
+  },
   PermissionModule.attendance: {
     PermissionAction.view,
     PermissionAction.approve,
@@ -75,7 +79,8 @@ bool isOwnerOnly(PermissionModule m, PermissionAction a) =>
 /// One-line description of each module (board S68).
 const moduleHints = <PermissionModule, String>{
   PermissionModule.organization: 'Profile, branch details',
-  PermissionModule.employees: 'Directory, profiles, custom fields',
+  PermissionModule.employees: 'Directory, profiles',
+  PermissionModule.employeeFields: 'Which fields are asked, required or hidden',
   PermissionModule.attendance: 'Records, missing punches',
   PermissionModule.leave: 'Requests, balances, adjustments',
   PermissionModule.holidays: 'Calendars and branch holidays',

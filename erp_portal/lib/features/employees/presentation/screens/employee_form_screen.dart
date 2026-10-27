@@ -29,6 +29,7 @@ import '../../../organization/presentation/setup_text.dart';
 import '../../domain/custom_field.dart';
 import '../../domain/employee.dart';
 import '../../domain/employee_rules.dart';
+import '../../domain/field_settings.dart';
 import '../providers/employee_providers.dart';
 import '../widgets/employee_widgets.dart';
 
@@ -51,10 +52,14 @@ enum _Section {
 
 /// Which section shows the error for a field key.
 _Section _sectionOf(String key) => switch (key) {
-  'firstName' || 'lastName' || 'code' => _Section.identity,
-  'workEmail' || 'mobile' || 'personalEmail' => _Section.contact,
+  'firstName' || 'lastName' || 'code' || 'displayName' => _Section.identity,
+  'workEmail' ||
+  'mobile' ||
+  'personalEmail' ||
+  'dateOfBirth' ||
+  'emergencyContact' => _Section.contact,
   'designation' || 'department' || 'joiningDate' => _Section.employment,
-  'branchId' || 'effectiveFrom' => _Section.branch,
+  'branchId' || 'effectiveFrom' || 'workLocation' => _Section.branch,
   'managerId' => _Section.manager,
   'shift' => _Section.schedule,
   _ when key.startsWith('custom.') => _Section.custom,
@@ -324,6 +329,10 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
       fields: fields,
       branch: branch,
       sendInvite: invite,
+      settings:
+          ref.read(fieldSettingsProvider).value ??
+          const EmployeeFieldSettings(),
+      seesRestricted: _seesRestricted(session),
     );
     if (_joining == null) errors['joiningDate'] = 'Choose the joining date.';
     if (_editing &&
@@ -565,6 +574,13 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
     );
   }
 
+  bool _seesRestricted(AppSession session) =>
+      session.scope == DataScope.organization &&
+      session.permissions.can(
+        PermissionModule.employees,
+        PermissionAction.edit,
+      );
+
   String _labelFor(String key, List<CustomField> fields) => switch (key) {
     'firstName' => 'First name',
     'lastName' => 'Last name',
@@ -572,6 +588,10 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
     'workEmail' => 'Work email',
     'mobile' => 'Mobile number',
     'personalEmail' => 'Personal email',
+    'displayName' => 'Display name',
+    'dateOfBirth' => 'Date of birth',
+    'emergencyContact' => 'Emergency contact',
+    'workLocation' => 'Work location',
     'designation' => 'Designation',
     'department' => 'Department',
     'joiningDate' => 'Joining date',
@@ -641,12 +661,11 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
     Employee draft,
   ) {
     final o = _original;
-    final seesPrivate =
-        session.scope == DataScope.organization &&
-        session.permissions.can(
-          PermissionModule.employees,
-          PermissionAction.edit,
-        );
+    final seesPrivate = _seesRestricted(session);
+    final rules =
+        ref.watch(fieldSettingsProvider).value ?? const EmployeeFieldSettings();
+    bool shows(StandardField f) => rules.shows(f);
+    bool req(StandardField f) => rules.requires(f);
     final isOwner = session.role == SystemRole.owner;
     final shifts = branch == null ? const <BranchShift>[] : shiftsFor(branch);
     final managers = [
@@ -726,16 +745,22 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
           inputFormatters: [UpperCaseTextFormatter()],
           onChanged: (_) => _clearError('code'),
         ),
-        _tracked(
-          'Display name',
-          AppTextField(
-            label: 'Display name',
-            controller: _display,
-            isOptional: true,
-            hintText: 'Shown in lists',
-            onChanged: (_) => setState(() {}),
+        if (shows(StandardField.displayName))
+          _tracked(
+            'Display name',
+            AppTextField(
+              label: 'Display name',
+              controller: _display,
+              isRequired: req(StandardField.displayName),
+              isOptional: !req(StandardField.displayName),
+              hintText: 'Shown in lists',
+              errorText: _err('displayName'),
+              onChanged: (_) {
+                _clearError('displayName');
+                setState(() {});
+              },
+            ),
           ),
-        ),
       ]),
       section(_Section.contact, [
         _tracked(
@@ -743,7 +768,7 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
           AppTextField(
             label: 'Work email',
             controller: _email,
-            isRequired: !_editing,
+            isRequired: !_editing || req(StandardField.workEmail),
             keyboardType: TextInputType.emailAddress,
             errorText: _err('workEmail'),
             helperText: _editing
@@ -755,88 +780,107 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
             },
           ),
         ),
-        AppTextField(
-          label: 'Mobile number',
-          controller: _mobile,
-          isOptional: o == null,
-          monospace: true,
-          keyboardType: TextInputType.phone,
-          readOnly: o != null && o.mobile.isNotEmpty,
-          helperText: o != null && o.mobile.isNotEmpty
-              ? 'Only the employee can change this.'
-              : null,
-          errorText: _err('mobile'),
-          onChanged: (_) => _clearError('mobile'),
-        ),
+        if (shows(StandardField.mobile))
+          AppTextField(
+            label: 'Mobile number',
+            controller: _mobile,
+            isRequired: req(StandardField.mobile),
+            isOptional: o == null && !req(StandardField.mobile),
+            monospace: true,
+            keyboardType: TextInputType.phone,
+            readOnly: o != null && o.mobile.isNotEmpty,
+            helperText: o != null && o.mobile.isNotEmpty
+                ? 'Only the employee can change this.'
+                : null,
+            errorText: _err('mobile'),
+            onChanged: (_) => _clearError('mobile'),
+          ),
         if (seesPrivate) ...[
+          if (shows(StandardField.personalEmail))
+            _tracked(
+              'Personal email',
+              AppTextField(
+                label: 'Personal email',
+                controller: _personalEmail,
+                isRequired: req(StandardField.personalEmail),
+                isOptional: !req(StandardField.personalEmail),
+                keyboardType: TextInputType.emailAddress,
+                helperText: 'Only HR admins can see this.',
+                errorText: _err('personalEmail'),
+                onChanged: (_) {
+                  _clearError('personalEmail');
+                  setState(() {});
+                },
+              ),
+            ),
+          if (shows(StandardField.dateOfBirth))
+            _tracked(
+              'Date of birth',
+              AppDateField(
+                label: 'Date of birth',
+                value: _birth,
+                isRequired: req(StandardField.dateOfBirth),
+                isOptional: !req(StandardField.dateOfBirth),
+                allowClear: true,
+                lastDate: DateTime.now(),
+                helperText: 'Restricted to HR admins.',
+                errorText: _err('dateOfBirth'),
+                onChanged: (d) => setState(() {
+                  _birth = d;
+                  _clearError('dateOfBirth');
+                }),
+              ),
+            ),
+          if (shows(StandardField.emergencyContact))
+            _tracked(
+              'Emergency contact',
+              AppTextField(
+                label: 'Emergency contact',
+                controller: _emergency,
+                isRequired: req(StandardField.emergencyContact),
+                isOptional: !req(StandardField.emergencyContact),
+                hintText: 'Name and phone',
+                errorText: _err('emergencyContact'),
+                onChanged: (_) {
+                  _clearError('emergencyContact');
+                  setState(() {});
+                },
+              ),
+            ),
+        ],
+      ]),
+      section(_Section.employment, [
+        if (shows(StandardField.designation))
           _tracked(
-            'Personal email',
+            'Designation',
             AppTextField(
-              label: 'Personal email',
-              controller: _personalEmail,
-              isOptional: true,
-              keyboardType: TextInputType.emailAddress,
-              helperText: 'Only HR admins can see this.',
-              errorText: _err('personalEmail'),
+              label: 'Designation',
+              controller: _designation,
+              isRequired: req(StandardField.designation),
+              isOptional: !req(StandardField.designation),
+              errorText: _err('designation'),
               onChanged: (_) {
-                _clearError('personalEmail');
+                _clearError('designation');
                 setState(() {});
               },
             ),
           ),
+        if (shows(StandardField.department))
           _tracked(
-            'Date of birth',
-            AppDateField(
-              label: 'Date of birth',
-              value: _birth,
-              isOptional: true,
-              allowClear: true,
-              lastDate: DateTime.now(),
-              helperText: 'Restricted to HR admins.',
-              onChanged: (d) => setState(() => _birth = d),
+            'Department',
+            AppDropdownField<String>(
+              label: 'Department',
+              isRequired: req(StandardField.department),
+              value: _department,
+              hintText: 'Choose a department',
+              errorText: _err('department'),
+              options: [for (final d in departments) AppDropdownOption(d, d)],
+              onChanged: (v) => setState(() {
+                _department = v;
+                _clearError('department');
+              }),
             ),
           ),
-          _tracked(
-            'Emergency contact',
-            AppTextField(
-              label: 'Emergency contact',
-              controller: _emergency,
-              isOptional: true,
-              hintText: 'Name and phone',
-              onChanged: (_) => setState(() {}),
-            ),
-          ),
-        ],
-      ]),
-      section(_Section.employment, [
-        _tracked(
-          'Designation',
-          AppTextField(
-            label: 'Designation',
-            controller: _designation,
-            isRequired: true,
-            errorText: _err('designation'),
-            onChanged: (_) {
-              _clearError('designation');
-              setState(() {});
-            },
-          ),
-        ),
-        _tracked(
-          'Department',
-          AppDropdownField<String>(
-            label: 'Department',
-            isRequired: true,
-            value: _department,
-            hintText: 'Choose a department',
-            errorText: _err('department'),
-            options: [for (final d in departments) AppDropdownOption(d, d)],
-            onChanged: (v) => setState(() {
-              _department = v;
-              _clearError('department');
-            }),
-          ),
-        ),
         _tracked(
           'Employment type',
           AppDropdownField<EmploymentType>(
@@ -868,22 +912,23 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
                   }),
           ),
         ),
-        _tracked(
-          'Probation',
-          AppDropdownField<int>(
-            label: 'Probation',
-            value: _probation,
-            helperText: probationEnd == null
-                ? null
-                : 'Ends ${employeeDateFormat.format(probationEnd)}.',
-            options: const [
-              AppDropdownOption(0, 'No probation'),
-              AppDropdownOption(3, '3 months'),
-              AppDropdownOption(6, '6 months'),
-            ],
-            onChanged: (v) => setState(() => _probation = v ?? 0),
+        if (shows(StandardField.probation))
+          _tracked(
+            'Probation',
+            AppDropdownField<int>(
+              label: 'Probation',
+              value: _probation,
+              helperText: probationEnd == null
+                  ? null
+                  : 'Ends ${employeeDateFormat.format(probationEnd)}.',
+              options: const [
+                AppDropdownOption(0, 'No probation'),
+                AppDropdownOption(3, '3 months'),
+                AppDropdownOption(6, '6 months'),
+              ],
+              onChanged: (v) => setState(() => _probation = v ?? 0),
+            ),
           ),
-        ),
       ]),
       section(
         _Section.branch,
@@ -930,16 +975,22 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
                 _clearError('effectiveFrom');
               }),
             ),
-          _tracked(
-            'Work location',
-            AppTextField(
-              label: 'Work location',
-              controller: _location,
-              isOptional: true,
-              hintText: 'e.g. Ring Road unit',
-              onChanged: (_) => setState(() {}),
+          if (shows(StandardField.workLocation))
+            _tracked(
+              'Work location',
+              AppTextField(
+                label: 'Work location',
+                controller: _location,
+                isRequired: req(StandardField.workLocation),
+                isOptional: !req(StandardField.workLocation),
+                hintText: 'e.g. Ring Road unit',
+                errorText: _err('workLocation'),
+                onChanged: (_) {
+                  _clearError('workLocation');
+                  setState(() {});
+                },
+              ),
             ),
-          ),
         ],
         callout: o != null && branch != null && _branchId != o.branchId
             ? _Consequences(
@@ -1005,23 +1056,25 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
                   }),
           ),
         ),
-        _tracked(
-          'Weekly off',
-          AppDropdownField<int?>(
-            label: 'Weekly off',
-            value: _weeklyOff,
-            options: [
-              AppDropdownOption(
-                null,
-                branch == null
-                    ? 'Branch default'
-                    : '${_closedDays(branch)} (branch default)',
-              ),
-              for (var i = 0; i < 7; i++) AppDropdownOption(i, weekdayNames[i]),
-            ],
-            onChanged: (v) => setState(() => _weeklyOff = v),
+        if (shows(StandardField.weeklyOff))
+          _tracked(
+            'Weekly off',
+            AppDropdownField<int?>(
+              label: 'Weekly off',
+              value: _weeklyOff,
+              options: [
+                AppDropdownOption(
+                  null,
+                  branch == null
+                      ? 'Branch default'
+                      : '${_closedDays(branch)} (branch default)',
+                ),
+                for (var i = 0; i < 7; i++)
+                  AppDropdownOption(i, weekdayNames[i]),
+              ],
+              onChanged: (v) => setState(() => _weeklyOff = v),
+            ),
           ),
-        ),
       ]),
       section(_Section.policy, [
         AppDropdownField<String>(

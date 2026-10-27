@@ -1,7 +1,8 @@
-import 'dart:typed_data';
-
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../errors/failure.dart';
 
 class PickedImage {
   const PickedImage({required this.name, required this.bytes});
@@ -20,14 +21,14 @@ class FilePickerImagePicking implements ImagePicking {
   const FilePickerImagePicking();
 
   @override
-  Future<PickedImage?> pickImage() async {
+  Future<PickedImage?> pickImage() => _guard(() async {
     final file = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: const ['png', 'jpg', 'jpeg'],
     );
     if (file == null) return null;
     return PickedImage(name: file.name, bytes: await file.xFile.readAsBytes());
-  }
+  });
 }
 
 final imagePickingProvider = Provider<ImagePicking>(
@@ -45,16 +46,31 @@ class FilePickerSpreadsheetPicking implements SpreadsheetPicking {
   const FilePickerSpreadsheetPicking();
 
   @override
-  Future<PickedImage?> pickSpreadsheet() async {
+  Future<PickedImage?> pickSpreadsheet() => _guard(() async {
     final file = await FilePicker.pickFile();
     if (file == null) return null;
     return PickedImage(name: file.name, bytes: await file.xFile.readAsBytes());
-  }
+  });
 }
 
 final spreadsheetPickingProvider = Provider<SpreadsheetPicking>(
   (ref) => const FilePickerSpreadsheetPicking(),
 );
+
+/// A picker that couldn't open or read the file becomes a [Failure] with a
+/// message people can act on (D-80), instead of a silent error.
+Future<PickedImage?> _guard(Future<PickedImage?> Function() pick) async {
+  try {
+    return await pick();
+  } on Failure {
+    rethrow;
+  } on Object catch (e) {
+    debugPrint('File picker failed: $e');
+    throw const UnexpectedFailure(
+      'The file couldn’t be opened. Check that the app may open files, then try again.',
+    );
+  }
+}
 
 const maxImageBytes = 2 * 1024 * 1024;
 

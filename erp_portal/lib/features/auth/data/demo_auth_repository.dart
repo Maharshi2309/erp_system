@@ -48,7 +48,10 @@ class DemoAuthRepository implements AuthRepository {
     ('mitesh.r@meridiantex.in', 'Attendance Manager'),
     ('aarav.b@meridiantex.in', 'Leave Approver'),
     ('EMP-0229', 'Employee · Isha Rathod'),
+    (platformAdminEmail, 'Platform super admin · statistics only'),
   ];
+
+  static const platformAdminEmail = 'admin@staffline.app';
 
   void _seed() {
     void add(
@@ -136,6 +139,18 @@ class DemoAuthRepository implements AuthRepository {
       scope: 'Surat',
       branchIds: const ['b-sur'],
     );
+    // Platform super admin: always two-step, no organization (D-75).
+    _accounts['u-platform'] = _DemoAccount(
+      const UserAccount(
+        id: 'u-platform',
+        fullName: 'Staffline Platform Admin',
+        email: platformAdminEmail,
+        isPlatformAdmin: true,
+      ),
+      password: demoPassword,
+      twoStep: true,
+    );
+    _memberships['u-platform'] = const [];
 
     final now = _now();
     _invitations[demoInviteToken] = Invitation(

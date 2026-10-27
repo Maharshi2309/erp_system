@@ -46,11 +46,16 @@ class StackedBarChart extends StatelessWidget {
     required this.bars,
     required this.semanticLabel,
     this.height = 180,
+    this.sparseLabels = false,
   });
 
   final List<({String label, List<(int, Color)> segments, bool muted})> bars;
   final String semanticLabel;
   final double height;
+
+  /// Only some bars are labelled, so a label may run past its own bar
+  /// instead of being clipped on narrow screens.
+  final bool sparseLabels;
 
   @override
   Widget build(BuildContext context) {
@@ -146,7 +151,10 @@ class StackedBarChart extends StatelessWidget {
                           b.label,
                           textAlign: TextAlign.center,
                           maxLines: 1,
-                          overflow: TextOverflow.clip,
+                          softWrap: !sparseLabels,
+                          overflow: sparseLabels
+                              ? TextOverflow.visible
+                              : TextOverflow.clip,
                           style: AppTypography.code.copyWith(fontSize: 10),
                         ),
                       ),

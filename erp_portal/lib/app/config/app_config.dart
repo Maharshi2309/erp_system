@@ -22,7 +22,8 @@ final appConfigProvider = Provider<AppConfig>(
 );
 
 /// Simulated network delay for the in-memory demo repositories, so busy
-/// states are visible. Tests override it with `Duration.zero`.
+/// states are visible. About one fast server round trip (D-76); tests
+/// override it with `Duration.zero`.
 final demoLatencyProvider = Provider<Duration>(
-  (ref) => const Duration(milliseconds: 500),
+  (ref) => const Duration(milliseconds: 150),
 );

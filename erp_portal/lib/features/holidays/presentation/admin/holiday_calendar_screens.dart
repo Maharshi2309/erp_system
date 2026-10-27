@@ -12,7 +12,6 @@ import '../../../../core/utils/file_download.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_data_table.dart';
-import '../../../../core/widgets/app_overlays.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../../attendance/presentation/admin/attendance_section.dart';
 import '../../../dashboard/presentation/dashboard_widgets.dart';
@@ -488,28 +487,28 @@ class _HolidayListScreenState extends ConsumerState<HolidayListScreen> {
       }
 
       void export() {
-        ref
-            .read(fileDownloadsProvider)
-            .save(
-              'holidays_$year.xlsx',
-              buildXlsx('Holidays $year', [
-                holidayTemplateHeaders,
-                for (final h in rows)
-                  for (final d in h.days)
-                    [
-                      DateFormat('dd/MM/yyyy').format(d),
-                      h.name,
-                      h.optional
-                          ? 'Optional'
-                          : (h.orgWide
-                                ? 'All branches'
-                                : h.branchIds.map(scope.branchName).join(', ')),
-                      categoryLabel(h.category),
-                    ],
-              ]),
-              mimeType: xlsxMimeType,
-            );
-        showAppToast(context, '${rows.length} holidays exported');
+        startDownload(
+          context,
+          ref,
+          'holidays_$year.xlsx',
+          buildXlsx('Holidays $year', [
+            holidayTemplateHeaders,
+            for (final h in rows)
+              for (final d in h.days)
+                [
+                  DateFormat('dd/MM/yyyy').format(d),
+                  h.name,
+                  h.optional
+                      ? 'Optional'
+                      : (h.orgWide
+                            ? 'All branches'
+                            : h.branchIds.map(scope.branchName).join(', ')),
+                  categoryLabel(h.category),
+                ],
+          ]),
+          mimeType: xlsxMimeType,
+          done: '${rows.length} holidays exported',
+        );
       }
 
       return Column(
@@ -580,12 +579,13 @@ class _HolidayListScreenState extends ConsumerState<HolidayListScreen> {
                   onChanged: (v) => setState(() => _scope = v ?? _Scope.all),
                 ),
               ),
-              AppButton(
-                label: 'Export',
-                icon: Icons.download_outlined,
-                variant: AppButtonVariant.secondary,
-                onPressed: rows.isEmpty ? null : export,
-              ),
+              if (scope.canExport)
+                AppButton(
+                  label: 'Export',
+                  icon: Icons.download_outlined,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: rows.isEmpty ? null : export,
+                ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),

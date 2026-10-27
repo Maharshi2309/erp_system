@@ -20,6 +20,8 @@ import '../../domain/employee.dart';
 import '../../domain/employee_import.dart';
 import '../../domain/employee_query.dart';
 import '../../domain/employee_repository.dart';
+import '../../domain/employee_rules.dart';
+import '../../domain/field_settings.dart';
 
 final employeeRepositoryProvider = Provider<EmployeeRepository>(
   (ref) => DemoEmployeeRepository(
@@ -148,23 +150,29 @@ class EmployeesNotifier extends AsyncNotifier<List<Employee>> {
     final code = ref.read(sessionProvider)?.employeeId;
     final self = state.value?.where((e) => e.code == code).firstOrNull;
     if (code == null || self == null) throw const PermissionFailure();
-    final digits = mobile.replaceAll(RegExp(r'\D'), '');
-    if (digits.isNotEmpty && (digits.length < 10 || digits.length > 12)) {
-      throw const ValidationFailure(
-        'Check the mobile number.',
-        fieldErrors: {
-          'mobile': 'Enter a 10-digit mobile number, with or without +91.',
-        },
-      );
-    }
-    return save(
-      self.copyWith(
-        mobile: mobile.trim(),
-        emergencyContact: emergencyContact.trim(),
-        customValues: {...self.customValues, 'preferred_language': language},
-      ),
-      notes: ['Contact details updated by the employee'],
+    final updated = self.copyWith(
+      mobile: mobile.trim(),
+      emergencyContact: emergencyContact.trim(),
+      customValues: {...self.customValues, 'preferred_language': language},
     );
+    // The same rules as the HR form (D-78), for the fields shown here.
+    final errors = {
+      for (final MapEntry(:key, :value) in validateEmployee(
+        updated,
+        others: [
+          for (final e in state.value ?? const <Employee>[])
+            if (e.id != self.id) e,
+        ],
+        fields: const [],
+        branch: null,
+        sendInvite: false,
+      ).entries)
+        if (key == 'mobile' || key == 'emergencyContact') key: value,
+    };
+    if (errors.isNotEmpty) {
+      throw ValidationFailure('Check your details.', fieldErrors: errors);
+    }
+    return save(updated, notes: ['Contact details updated by the employee']);
   }
 
   Future<Employee> setStatus(
@@ -364,6 +372,50 @@ class CustomFieldsNotifier extends AsyncNotifier<List<CustomField>> {
       for (final id in ids) current.firstWhere((f) => f.id == id),
     ]);
     await _repo.reorderCustomFields(_org, ids);
+  }
+}
+
+/// Which built-in fields the forms and imports ask for (D-73).
+final fieldSettingsProvider =
+    AsyncNotifierProvider<FieldSettingsNotifier, EmployeeFieldSettings>(
+      FieldSettingsNotifier.new,
+    );
+
+class FieldSettingsNotifier extends AsyncNotifier<EmployeeFieldSettings> {
+  @override
+  Future<EmployeeFieldSettings> build() => ref
+      .read(employeeRepositoryProvider)
+      .fieldSettings(_session(ref).organizationId);
+
+  Future<void> save(EmployeeFieldSettings settings) async {
+    final session = _session(ref);
+    final before = state.value ?? const EmployeeFieldSettings();
+    final saved = await ref
+        .read(employeeRepositoryProvider)
+        .saveFieldSettings(
+          session.organizationId,
+          settings,
+          by: session.displayName,
+        );
+    state = AsyncData(saved);
+    await ref
+        .read(auditRecorderProvider)
+        .record(
+          action: 'settings.employeeFields',
+          entityType: 'Employee fields',
+          entityLabel: 'Employee fields',
+          entityRoute: AppRoutes.employeeFields,
+          summary: 'Built-in employee fields updated',
+          changes: [
+            for (final f in StandardField.values)
+              if (before.ruleOf(f) != saved.ruleOf(f))
+                (
+                  field: f.label,
+                  before: before.ruleOf(f).label,
+                  after: saved.ruleOf(f).label,
+                ),
+          ],
+        );
   }
 }
 

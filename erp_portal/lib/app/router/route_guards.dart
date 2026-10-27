@@ -58,18 +58,35 @@ String? resolveRedirect({required Uri uri, required AuthState auth}) {
         AppRoutes.verifyEmail,
       }, AppRoutes.onboarding);
 
+    case PlatformSignedIn():
+      // The platform admin has no organization: platform pages only.
+      if (path == AppRoutes.platform || path.startsWith('/platform/')) {
+        return null;
+      }
+      return AppRoutes.platform;
+
     case SignedIn(:final session):
       final home = AppRoutes.homeFor(session.role);
       if (path == AppRoutes.root) return home;
+      // Organization members never reach platform pages.
+      if (path == AppRoutes.platform || path.startsWith('/platform/')) {
+        return Uri(
+          path: AppRoutes.accessDenied,
+          queryParameters: {'from': path},
+        ).toString();
+      }
       if (AppRoutes.signInPaths.contains(path)) return from ?? home;
       if (path == AppRoutes.chooseOrganization &&
           !session.canSwitchOrganization) {
         return home;
       }
       // Invitations sit under Roles but belong to whoever invites people.
-      final module = path == AppRoutes.invitations
-          ? PermissionModule.employees
-          : bestMatch(path, allDestinations)?.module;
+      final module = switch (path) {
+        AppRoutes.invitations => PermissionModule.employees,
+        // Under Settings, but its own permission (D-73).
+        AppRoutes.employeeFields => PermissionModule.employeeFields,
+        _ => bestMatch(path, allDestinations)?.module,
+      };
       final denied =
           (module != null && !session.permissions.canView(module)) ||
           _requiredFor(
@@ -148,9 +165,6 @@ List<Permission> _requiredFor(String path) {
     return const [
       Permission(PermissionModule.holidays, PermissionAction.create),
     ];
-  }
-  if (path == AppRoutes.employeeFields) {
-    return const [Permission(PermissionModule.settings, PermissionAction.edit)];
   }
   return const [];
 }

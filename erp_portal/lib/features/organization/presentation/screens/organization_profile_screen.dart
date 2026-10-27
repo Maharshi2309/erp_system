@@ -116,12 +116,20 @@ class _OrganizationProfileScreenState
   Future<void> _save(Organization org) async {
     if (_busy) return;
     final errors = {
-      if (_text('name').isEmpty) 'name': 'Enter the display name.',
+      if (_text('name').isEmpty)
+        'name': 'Enter the display name.'
+      else if (_text('name').length < 2 || _text('name').length > 80)
+        'name': 'Use 2 to 80 characters.',
+      if (_text('legalName').length > 120)
+        'legalName': 'Use up to 120 characters.',
       if (_text('contactEmail').isNotEmpty &&
           !Validators.isEmail(_text('contactEmail')))
-        'contactEmail': 'Check the email address.',
-      if (_text('pin').isNotEmpty && !RegExp(r'^\d{6}$').hasMatch(_text('pin')))
-        'pin': 'PIN codes have 6 digits.',
+        'contactEmail': Validators.emailMessage,
+      if (_text('contactPhone').isNotEmpty &&
+          !Validators.isPhone(_text('contactPhone')))
+        'contactPhone': Validators.phoneMessage,
+      if (_text('pin').isNotEmpty && !Validators.isPin(_text('pin')))
+        'pin': Validators.pinMessage,
     };
     setState(() => _errors = errors);
     if (errors.isNotEmpty) return;

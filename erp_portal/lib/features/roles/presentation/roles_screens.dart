@@ -18,6 +18,7 @@ import '../../../core/widgets/app_dropdown_field.dart';
 import '../../../core/widgets/app_overlays.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../core/widgets/kpi_card.dart';
+import '../../../core/widgets/selection_controls.dart';
 import '../../../core/widgets/state_views.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../audit/presentation/audit_providers.dart';
@@ -28,47 +29,74 @@ import '../../leave/presentation/leave_widgets.dart';
 import '../../organization/presentation/providers/organization_providers.dart';
 import '../../settings/presentation/settings_providers.dart';
 import '../domain/access.dart';
+import '../domain/access_levels.dart';
 import 'access_providers.dart';
+import 'access_widgets.dart';
 import 'roles_section.dart';
 
 class _TwoLine extends StatelessWidget {
-  const _TwoLine(this.top, this.bottom, {this.onTap});
+  const _TwoLine(this.top, this.bottom);
 
   final String top;
   final String bottom;
-  final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) {
-    final body = Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          top,
-          style: AppTypography.small.copyWith(
-            color: onTap == null ? AppColors.textPrimary : AppColors.primary,
-            fontWeight: FontWeight.w500,
-          ),
+  Widget build(BuildContext context) => Column(
+    mainAxisAlignment: MainAxisAlignment.center,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        top,
+        style: AppTypography.small.copyWith(
+          color: AppColors.textPrimary,
+          fontWeight: FontWeight.w500,
         ),
-        Text(
-          bottom,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTypography.helper,
-        ),
-      ],
-    );
-    return onTap == null ? body : InkWell(onTap: onTap, child: body);
-  }
+      ),
+      Text(
+        bottom,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: AppTypography.helper,
+      ),
+    ],
+  );
 }
 
-/// Board S67 — every role, system and custom.
-class RoleDirectoryScreen extends ConsumerWidget {
+IconData roleIcon(RoleDefinition r) => switch (r.base) {
+  SystemRole.owner => Icons.workspace_premium_outlined,
+  SystemRole.hrAdmin => Icons.badge_outlined,
+  SystemRole.branchManager => Icons.storefront_outlined,
+  SystemRole.attendanceManager => Icons.schedule_outlined,
+  SystemRole.leaveApprover => Icons.fact_check_outlined,
+  SystemRole.employee => Icons.person_outline,
+};
+
+/// Board S67, redesigned (D-79): each role as a card that says in plain
+/// words who they see and what they can do; or all roles side by side.
+class RoleDirectoryScreen extends ConsumerStatefulWidget {
   const RoleDirectoryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => RolesSection(
+  ConsumerState<RoleDirectoryScreen> createState() =>
+      _RoleDirectoryScreenState();
+}
+
+class _RoleDirectoryScreenState extends ConsumerState<RoleDirectoryScreen> {
+  bool _compare = false;
+
+  Future<void> _create(RolesScope scope) async {
+    final from = await showDialog<String>(
+      context: context,
+      builder: (_) => _TemplateDialog(roles: scope.data.roles),
+    );
+    if (from == null || !mounted) return;
+    context.go(
+      from.isEmpty ? AppRoutes.newRole : '${AppRoutes.newRole}?from=$from',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => RolesSection(
     current: AppRoutes.roles,
     body: (context, scope) => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -79,105 +107,404 @@ class RoleDirectoryScreen extends ConsumerWidget {
           spacing: AppSpacing.md,
           runSpacing: AppSpacing.sm,
           children: [
-            Text(
-              '${scope.data.roles.length} roles · ${scope.data.roles.where((r) => !r.isSystem).length} custom',
-              style: AppTypography.small,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'A role is a job’s set of access. Give people a role instead of setting access one by one.',
+                  style: AppTypography.small,
+                ),
+                Text(
+                  '${scope.data.roles.length} roles · ${scope.data.roles.where((r) => !r.isSystem).length} made by you',
+                  style: AppTypography.helper,
+                ),
+              ],
             ),
-            if (scope.canCreate)
-              AppButton(
-                label: 'Create role',
-                icon: Icons.add,
-                onPressed: () => context.go(AppRoutes.newRole),
-              ),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                ChoiceChips<bool>(
+                  options: const [(false, 'Roles'), (true, 'Compare roles')],
+                  selected: _compare,
+                  onSelected: (v) => setState(() => _compare = v),
+                ),
+                if (scope.canCreate)
+                  AppButton(
+                    label: 'Create role',
+                    icon: Icons.add,
+                    onPressed: () => _create(scope),
+                  ),
+              ],
+            ),
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        AppDataTable(
-          minWidth: 860,
-          columns: const [
-            DataColumn(label: Text('Role')),
-            DataColumn(label: Text('Type')),
-            DataColumn(label: Text('Scope')),
-            DataColumn(label: Text('People'), numeric: true),
-            DataColumn(label: Text('Status')),
-            DataColumn(label: Text('Actions')),
-          ],
-          rows: [
-            for (final r in scope.data.roles)
-              DataRow(
-                cells: [
-                  DataCell(
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 320),
-                      child: _TwoLine(
-                        r.name,
-                        r.description,
-                        onTap: () => context.go(AppRoutes.role(r.id)),
-                      ),
-                    ),
-                  ),
-                  DataCell(
-                    StatusBadge(
-                      label: r.isSystem ? 'System · locked' : 'Custom',
-                      tone: r.isSystem ? StatusTone.neutral : StatusTone.info,
-                    ),
-                  ),
-                  DataCell(
-                    Text(scopeLabelOf(r.scope), style: AppTypography.small),
-                  ),
-                  DataCell(
-                    TextButton(
-                      onPressed: () =>
-                          context.go('${AppRoutes.people}?role=${r.id}'),
-                      child: Text(
-                        '${scope.holders(r.id)}',
-                        semanticsLabel:
-                            '${scope.holders(r.id)} people with ${r.name}',
-                      ),
-                    ),
-                  ),
-                  DataCell(
-                    StatusBadge(
-                      label: r.active ? 'Active' : 'Inactive',
-                      tone: r.active ? StatusTone.success : StatusTone.neutral,
-                    ),
-                  ),
-                  DataCell(
-                    Wrap(
-                      spacing: AppSpacing.xs,
-                      children: [
-                        TextButton(
-                          onPressed: () => context.go(AppRoutes.role(r.id)),
-                          child: Text(
-                            r.isSystem || !scope.canEdit ? 'View' : 'Edit',
-                            semanticsLabel:
-                                '${r.isSystem || !scope.canEdit ? 'View' : 'Edit'} ${r.name}',
-                          ),
-                        ),
-                        if (scope.canCreate && !r.isOwner)
-                          TextButton(
-                            onPressed: () =>
-                                context.go('${AppRoutes.newRole}?from=${r.id}'),
-                            child: Text(
-                              'Duplicate',
-                              semanticsLabel: 'Duplicate ${r.name}',
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-          ],
-        ),
+        if (_compare)
+          _CompareRoles(roles: scope.data.roles)
+        else
+          ResponsiveGrid(
+            minItemWidth: 320,
+            maxColumns: 3,
+            children: [
+              for (final r in scope.data.roles)
+                _RoleCard(
+                  role: r,
+                  people: scope.holders(r.id),
+                  canEdit: !r.isSystem && scope.canEdit,
+                  canDuplicate: scope.canCreate && !r.isOwner,
+                ),
+            ],
+          ),
         const SizedBox(height: AppSpacing.sm),
         const Text(
-          'System roles can be viewed and duplicated but not edited. The last owner can’t be removed or downgraded.',
+          'Built-in roles can be viewed and copied, not changed. The last owner can’t be removed or downgraded.',
           style: AppTypography.helper,
         ),
       ],
     ),
   );
+}
+
+class _RoleCard extends StatelessWidget {
+  const _RoleCard({
+    required this.role,
+    required this.people,
+    required this.canEdit,
+    required this.canDuplicate,
+  });
+
+  final RoleDefinition role;
+  final int people;
+  final bool canEdit;
+  final bool canDuplicate;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = role;
+    final areas = [
+      for (final m in PermissionModule.values)
+        if (levelOf(r.grants, m) != AccessLevel.none)
+          (accessAreas[m]!.name, levelOf(r.grants, m)),
+    ];
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: Icon(roleIcon(r), color: AppColors.primary),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    InkWell(
+                      onTap: () => context.go(AppRoutes.role(r.id)),
+                      child: Text(r.name, style: AppTypography.cardTitle),
+                    ),
+                    const SizedBox(height: 2),
+                    Wrap(
+                      spacing: AppSpacing.xs,
+                      runSpacing: AppSpacing.xs,
+                      children: [
+                        StatusBadge(
+                          label: r.isSystem ? 'Built-in' : 'Made by you',
+                          tone: r.isSystem
+                              ? StatusTone.neutral
+                              : StatusTone.info,
+                        ),
+                        if (!r.active)
+                          const StatusBadge(
+                            label: 'Switched off',
+                            tone: StatusTone.warning,
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (r.description.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(r.description, style: AppTypography.small),
+          ],
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Sees: ${scopeQuestionLabel(r.scope)}',
+            style: AppTypography.label,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          if (areas.isEmpty)
+            const Text(
+              'Only their own self-service pages',
+              style: AppTypography.helper,
+            )
+          else
+            Wrap(
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
+              children: [
+                for (final (name, level) in areas.take(6))
+                  _LevelChip(name: name, level: level),
+                if (areas.length > 6)
+                  Text(
+                    '+${areas.length - 6} more',
+                    style: AppTypography.helper,
+                  ),
+              ],
+            ),
+          const Divider(height: AppSpacing.xl),
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: AppSpacing.sm,
+            children: [
+              TextButton(
+                onPressed: () => context.go('${AppRoutes.people}?role=${r.id}'),
+                child: Text(
+                  '$people ${people == 1 ? 'person' : 'people'}',
+                  semanticsLabel: '$people people with ${r.name}',
+                ),
+              ),
+              Wrap(
+                spacing: AppSpacing.xs,
+                children: [
+                  TextButton(
+                    onPressed: () => context.go(AppRoutes.role(r.id)),
+                    child: Text(
+                      canEdit ? 'Edit' : 'View',
+                      semanticsLabel: '${canEdit ? 'Edit' : 'View'} ${r.name}',
+                    ),
+                  ),
+                  if (canDuplicate)
+                    TextButton(
+                      onPressed: () =>
+                          context.go('${AppRoutes.newRole}?from=${r.id}'),
+                      child: Text(
+                        'Copy',
+                        semanticsLabel: 'Duplicate ${r.name}',
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "People · Can edit" as a small pill; stronger levels look stronger.
+class _LevelChip extends StatelessWidget {
+  const _LevelChip({required this.name, required this.level});
+
+  final String name;
+  final AccessLevel level;
+
+  @override
+  Widget build(BuildContext context) {
+    final strong = level == AccessLevel.full || level == AccessLevel.edit;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: strong ? AppColors.primarySoft : AppColors.neutralSoft,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Text(
+        '$name · ${level.label}',
+        style: AppTypography.helper.copyWith(
+          color: strong ? AppColors.primaryHover : AppColors.textSecondary,
+        ),
+      ),
+    );
+  }
+}
+
+/// Every area against every role, in level words.
+class _CompareRoles extends StatelessWidget {
+  const _CompareRoles({required this.roles});
+
+  final List<RoleDefinition> roles;
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = roles.where((r) => r.active).toList();
+    Widget cell(AccessLevel l) => Center(
+      child: l == AccessLevel.none
+          ? const Text('—', style: AppTypography.helper)
+          : _LevelChip(name: '', level: l),
+    );
+    return AppCard(
+      padding: EdgeInsets.zero,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Table(
+          defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+          columnWidths: {
+            0: const FixedColumnWidth(200),
+            for (var i = 1; i <= shown.length; i++)
+              i: const FixedColumnWidth(150),
+          },
+          border: const TableBorder(
+            horizontalInside: BorderSide(color: AppColors.divider),
+          ),
+          children: [
+            TableRow(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  child: Text('Area', style: AppTypography.tableHeader),
+                ),
+                for (final r in shown)
+                  Text(
+                    r.name,
+                    textAlign: TextAlign.center,
+                    style: AppTypography.tableHeader,
+                  ),
+              ],
+            ),
+            TableRow(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  child: Text(
+                    'Whose information',
+                    style: AppTypography.bodyStrong,
+                  ),
+                ),
+                for (final r in shown)
+                  Text(
+                    scopeQuestionLabel(r.scope),
+                    textAlign: TextAlign.center,
+                    style: AppTypography.small,
+                  ),
+              ],
+            ),
+            for (final m in PermissionModule.values)
+              TableRow(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Text(
+                      accessAreas[m]!.name,
+                      style: AppTypography.bodyStrong,
+                    ),
+                  ),
+                  for (final r in shown) cell(levelOf(r.grants, m)),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "Create role": start from an existing role, or from nothing.
+class _TemplateDialog extends StatelessWidget {
+  const _TemplateDialog({required this.roles});
+
+  final List<RoleDefinition> roles;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget option({
+      required String title,
+      required String text,
+      required String value,
+    }) => Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: OptionCard(
+        title: title,
+        description: text,
+        selected: false,
+        onTap: () => Navigator.of(context).pop(value),
+      ),
+    );
+    return Dialog(
+      insetPadding: const EdgeInsets.all(AppSpacing.lg),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520, maxHeight: 640),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.lg,
+                AppSpacing.lg,
+                AppSpacing.sm,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Semantics(
+                    header: true,
+                    child: const Text(
+                      'Start a new role',
+                      style: AppTypography.sectionTitle,
+                    ),
+                  ),
+                  const Text(
+                    'Copy the role closest to the job, then change what’s different.',
+                    style: AppTypography.small,
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                children: [
+                  for (final r in roles)
+                    if (!r.isOwner)
+                      option(
+                        title: 'Like ${r.name}',
+                        text: r.description.isEmpty
+                            ? 'Sees: ${scopeQuestionLabel(r.scope)}'
+                            : r.description,
+                        value: r.id,
+                      ),
+                  option(
+                    title: 'Start from scratch',
+                    text: 'No access to start with — you choose everything.',
+                    value: '',
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: AppButton(
+                  label: 'Cancel',
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// Board S70 — who holds which role, and changing it.
@@ -263,7 +590,7 @@ class _PeopleAccessScreenState extends ConsumerState<PeopleAccessScreen> {
               columns: [
                 const DataColumn(label: Text('Person')),
                 const DataColumn(label: Text('Role')),
-                const DataColumn(label: Text('Branch scope')),
+                const DataColumn(label: Text('Sees')),
                 const DataColumn(label: Text('Membership')),
                 if (scope.canEdit) const DataColumn(label: Text('Actions')),
               ],
@@ -484,6 +811,26 @@ class _ChangeRoleDialogState extends ConsumerState<ChangeRoleDialog> {
                     ],
                   ),
                 ],
+                const SizedBox(height: AppSpacing.md),
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceMuted,
+                    border: Border.all(color: AppColors.border),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'With ${pick.name}, ${r.name.split(' ').first}:',
+                        style: AppTypography.label,
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      PlainSummary(role: pick, maxItems: 6),
+                    ],
+                  ),
+                ),
                 if (impact.isNotEmpty && changed) ...[
                   const SizedBox(height: AppSpacing.md),
                   Container(

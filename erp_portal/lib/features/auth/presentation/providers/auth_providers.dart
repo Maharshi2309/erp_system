@@ -70,8 +70,15 @@ class AuthController extends Notifier<AuthState> {
         state = const SignedOut();
         return;
       }
-      final account = await _repo.accountById(saved.accountId);
-      final memberships = await _repo.membershipsOf(saved.accountId);
+      final (account, memberships) = await (
+        _repo.accountById(saved.accountId),
+        _repo.membershipsOf(saved.accountId),
+      ).wait;
+      if (account != null && account.isPlatformAdmin) {
+        _keepSignedIn = true;
+        state = PlatformSignedIn(account);
+        return;
+      }
       final membership = memberships
           .where((m) => m.isActive && m.organizationId == saved.organizationId)
           .firstOrNull;
@@ -106,19 +113,23 @@ class AuthController extends Notifier<AuthState> {
     // The organization's policy can require two-step for the role even
     // when the person hasn't turned it on (board S83).
     var requires = result.requiresTwoStep;
+    final memberships = await _repo.membershipsOf(result.account.id);
     if (!requires) {
+      // Each organization's policy, all checked at once.
       final settings = ref.read(settingsRepositoryProvider);
-      for (final m in await _repo.membershipsOf(result.account.id)) {
-        if (!m.isActive) continue;
-        final policy = (await settings.load(m.organizationId)).security.twoStep;
-        if (policy.requires(m.role)) requires = true;
+      final active = memberships.where((m) => m.isActive).toList();
+      final policies = await [
+        for (final m in active) settings.load(m.organizationId),
+      ].wait;
+      for (final (i, m) in active.indexed) {
+        if (policies[i].security.twoStep.requires(m.role)) requires = true;
       }
     }
     if (requires && !store.isTrusted(result.account.id)) {
       state = AwaitingTwoStep(result.account);
       return;
     }
-    await _afterAuthentication(result.account);
+    await _afterAuthentication(result.account, memberships: memberships);
   }
 
   /// Returns the number of backup codes left when one was used.
@@ -226,6 +237,7 @@ class AuthController extends Notifier<AuthState> {
     AwaitingOrganizationChoice(:final account) => account,
     SignedIn(:final account) => account,
     AwaitingTwoStep(:final account) => account,
+    PlatformSignedIn(:final account) => account,
     _ => null,
   };
 
@@ -252,18 +264,32 @@ class AuthController extends Notifier<AuthState> {
     state = const SignedOut();
   }
 
-  Future<void> _afterAuthentication(UserAccount account) async {
-    final memberships = await _repo.membershipsOf(account.id);
-    if (memberships.isEmpty) {
+  /// [memberships] when the caller already has them (saves a round trip).
+  Future<void> _afterAuthentication(
+    UserAccount account, {
+    List<OrganizationMembership>? memberships,
+  }) async {
+    if (account.isPlatformAdmin) {
+      final store = await _store;
+      if (_keepSignedIn) {
+        await store.save(accountId: account.id, organizationId: '');
+      } else {
+        await store.clear();
+      }
+      state = PlatformSignedIn(account);
+      return;
+    }
+    final all = memberships ?? await _repo.membershipsOf(account.id);
+    if (all.isEmpty) {
       state = NeedsOrganization(account);
       return;
     }
-    final active = memberships.where((m) => m.isActive).toList();
-    if (memberships.length == 1 && active.length == 1) {
-      await _enter(account, active.single, memberships);
+    final active = all.where((m) => m.isActive).toList();
+    if (all.length == 1 && active.length == 1) {
+      await _enter(account, active.single, all);
       return;
     }
-    state = AwaitingOrganizationChoice(account, memberships);
+    state = AwaitingOrganizationChoice(account, all);
   }
 
   Future<void> _enter(

@@ -4,6 +4,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import 'app_button.dart';
+import 'app_text_field.dart';
 
 /// Asks the user to confirm an action. Resolves to `true` only when the
 /// confirm button is pressed; Esc, Cancel and tapping outside give `false`.
@@ -261,4 +262,114 @@ void showToastWith(
         ),
       ),
     );
+}
+
+/// Asks for a reason of at least 3 characters before a decision (e.g.
+/// rejecting). Resolves to the trimmed reason, or null when cancelled.
+Future<String?> showReasonDialog(
+  BuildContext context, {
+  required String title,
+  required String message,
+  required String confirmLabel,
+  String label = 'Reason',
+  bool destructive = true,
+}) => showDialog<String>(
+  context: context,
+  builder: (_) => _ReasonDialog(
+    title: title,
+    message: message,
+    confirmLabel: confirmLabel,
+    label: label,
+    destructive: destructive,
+  ),
+);
+
+class _ReasonDialog extends StatefulWidget {
+  const _ReasonDialog({
+    required this.title,
+    required this.message,
+    required this.confirmLabel,
+    required this.label,
+    required this.destructive,
+  });
+
+  final String title;
+  final String message;
+  final String confirmLabel;
+  final String label;
+  final bool destructive;
+
+  @override
+  State<_ReasonDialog> createState() => _ReasonDialogState();
+}
+
+class _ReasonDialogState extends State<_ReasonDialog> {
+  final _text = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  void _confirm() {
+    final reason = _text.text.trim();
+    if (reason.length < 3) {
+      setState(() => _error = 'Enter at least 3 characters.');
+      return;
+    }
+    Navigator.of(context).pop(reason);
+  }
+
+  @override
+  Widget build(BuildContext context) => Dialog(
+    insetPadding: const EdgeInsets.all(AppSpacing.lg),
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 440),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Semantics(
+              header: true,
+              child: Text(widget.title, style: AppTypography.sectionTitle),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(widget.message, style: AppTypography.bodySecondary),
+            const SizedBox(height: AppSpacing.lg),
+            AppTextField(
+              label: widget.label,
+              controller: _text,
+              isRequired: true,
+              maxLines: 3,
+              errorText: _error,
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                AppButton(
+                  label: 'Cancel',
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                AppButton(
+                  label: widget.confirmLabel,
+                  variant: widget.destructive
+                      ? AppButtonVariant.danger
+                      : AppButtonVariant.primary,
+                  onPressed: _confirm,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }

@@ -3,6 +3,7 @@ import '../../../core/utils/validators.dart';
 import '../../organization/domain/branch.dart';
 import 'custom_field.dart';
 import 'employee.dart';
+import 'field_settings.dart';
 
 /// A shift a branch offers (board S43 "Shift").
 typedef BranchShift = ({String name, int start, int end});
@@ -41,17 +42,34 @@ String describeShift(Employee e, Branch? branch) {
 /// all use this, so the rules can't drift apart (PRD §6.3, §18).
 ///
 /// [others] = every other employee in the organization. [sendInvite]: an
-/// invitation needs a work email.
+/// invitation needs a work email. [settings] decide which built-in fields
+/// are required (D-73); restricted fields are only required from people
+/// who can see them ([seesRestricted]).
 Map<String, String> validateEmployee(
   Employee e, {
   required Iterable<Employee> others,
   required Iterable<CustomField> fields,
   required Branch? branch,
   required bool sendInvite,
+  EmployeeFieldSettings settings = const EmployeeFieldSettings(),
+  bool seesRestricted = true,
+  DateTime? today,
 }) {
   final errors = <String, String>{};
-  if (e.firstName.trim().isEmpty) errors['firstName'] = 'Enter a first name.';
-  if (e.lastName.trim().isEmpty) errors['lastName'] = 'Enter a last name.';
+  final now = today ?? DateTime.now();
+  if (e.firstName.trim().isEmpty) {
+    errors['firstName'] = 'Enter a first name.';
+  } else if (!Validators.isPersonName(e.firstName)) {
+    errors['firstName'] = Validators.nameMessage;
+  }
+  if (e.lastName.trim().isEmpty) {
+    errors['lastName'] = 'Enter a last name.';
+  } else if (!Validators.isPersonName(e.lastName)) {
+    errors['lastName'] = Validators.nameMessage;
+  }
+  if (e.displayName.trim().length > 60) {
+    errors['displayName'] = 'Use up to 60 characters.';
+  }
 
   final code = e.code.trim().toUpperCase();
   if (code.isEmpty) {
@@ -67,6 +85,8 @@ Map<String, String> validateEmployee(
   if (email.isEmpty) {
     if (sendInvite) {
       errors['workEmail'] = 'Enter a work email to send the invitation.';
+    } else if (settings.requires(StandardField.workEmail)) {
+      errors['workEmail'] = 'Enter a work email.';
     }
   } else if (!Validators.isEmail(email)) {
     errors['workEmail'] =
@@ -77,20 +97,82 @@ Map<String, String> validateEmployee(
         'This email belongs to ${o.fullName} (${o.code}). '
         'Use a different address.';
   }
-  if (e.personalEmail.trim().isNotEmpty &&
-      !Validators.isEmail(e.personalEmail)) {
-    errors['personalEmail'] = 'Check the email address.';
+  final personal = e.personalEmail.trim().toLowerCase();
+  if (personal.isNotEmpty) {
+    if (!Validators.isEmail(personal)) {
+      errors['personalEmail'] = Validators.emailMessage;
+    } else if (personal == email) {
+      errors['personalEmail'] = 'Use a personal address, not the work email.';
+    }
   }
   final digits = e.mobile.replaceAll(RegExp(r'\D'), '');
-  if (digits.isNotEmpty && (digits.length < 10 || digits.length > 12)) {
-    errors['mobile'] = 'Enter a 10-digit mobile number, with or without +91.';
+  if (e.mobile.trim().isNotEmpty && !Validators.isMobile(e.mobile)) {
+    errors['mobile'] = Validators.mobileMessage;
+  }
+  final emergency = e.emergencyContact.trim();
+  if (emergency.isNotEmpty) {
+    final phone = Validators.phoneIn(emergency);
+    if (phone == null || !RegExp(r'\p{L}', unicode: true).hasMatch(emergency)) {
+      errors['emergencyContact'] =
+          'Add a name and a 10-digit phone number, e.g. “Ravi Shah, 98250 12345”.';
+    } else if (phone == Validators.nationalNumber(e.mobile)) {
+      errors['emergencyContact'] =
+          'Use someone else’s number, not the employee’s own mobile.';
+    } else if (emergency.length > 80) {
+      errors['emergencyContact'] = 'Use up to 80 characters.';
+    }
+  }
+  if (e.dateOfBirth case final birth?) {
+    if (birth.isAfter(now)) {
+      errors['dateOfBirth'] = 'The date of birth can’t be in the future.';
+    } else if (Validators.ageOn(birth, e.joiningDate) < 18) {
+      errors['dateOfBirth'] =
+          'The employee must be at least 18 on the joining date.';
+    } else if (Validators.ageOn(birth, now) > 80) {
+      errors['dateOfBirth'] = 'Check the year — that makes them over 80.';
+    }
+  }
+  if (e.joiningDate.isAfter(now.add(const Duration(days: 183)))) {
+    errors['joiningDate'] = 'Joining dates can be up to 6 months ahead.';
+  }
+  if (e.designation.trim().isNotEmpty && !Validators.isLabel(e.designation)) {
+    errors['designation'] = 'Use 2 to 60 characters, including letters.';
+  }
+  if (e.workLocation.trim().length > 80) {
+    errors['workLocation'] = 'Use up to 80 characters.';
   }
 
-  if (e.designation.trim().isEmpty) {
+  bool missing(StandardField f, bool empty) => empty && settings.requires(f);
+  if (missing(StandardField.displayName, e.displayName.trim().isEmpty)) {
+    errors['displayName'] = 'Enter a display name.';
+  }
+  if (missing(StandardField.mobile, digits.isEmpty)) {
+    errors['mobile'] = 'Enter a mobile number.';
+  }
+  if (seesRestricted) {
+    if (missing(StandardField.personalEmail, e.personalEmail.trim().isEmpty)) {
+      errors['personalEmail'] = 'Enter a personal email.';
+    }
+    if (missing(StandardField.dateOfBirth, e.dateOfBirth == null)) {
+      errors['dateOfBirth'] = 'Enter the date of birth.';
+    }
+    if (missing(
+      StandardField.emergencyContact,
+      e.emergencyContact.trim().isEmpty,
+    )) {
+      errors['emergencyContact'] = 'Enter an emergency contact.';
+    }
+  }
+  if (missing(StandardField.designation, e.designation.trim().isEmpty)) {
     errors['designation'] = 'Enter a designation.';
   }
-  if (!departments.contains(e.department)) {
+  if (e.department.isEmpty
+      ? settings.requires(StandardField.department)
+      : !departments.contains(e.department)) {
     errors['department'] = 'Choose a department.';
+  }
+  if (missing(StandardField.workLocation, e.workLocation.trim().isEmpty)) {
+    errors['workLocation'] = 'Enter a work location.';
   }
 
   if (branch == null) {

@@ -309,48 +309,48 @@ class _AuditLogScreenState extends ConsumerState<AuditLogScreen> {
         : (branches.where((b) => b.id == id).firstOrNull?.name ?? id);
 
     void export() {
-      ref
-          .read(fileDownloadsProvider)
-          .save(
-            'audit_log_${DateFormat('yyyy-MM-dd').format(now)}.xlsx',
-            buildXlsx('Audit log', [
-              [
-                'Event',
-                'Time',
-                'Actor',
-                'Role',
-                'Action',
-                'Entity',
-                'Scope',
-                'Summary',
-                'Reason',
-                'Changes (masked)',
-                'IP (masked)',
-                'Checksum',
-              ],
-              for (final e in shown)
-                [
-                  e.id,
-                  DateFormat('yyyy-MM-dd HH:mm:ss').format(e.at),
-                  e.actorName,
-                  e.actorRole,
-                  e.action,
-                  e.entityLabel,
-                  e.scopeLabel.isEmpty ? branchName(e.branchId) : e.scopeLabel,
-                  e.summary,
-                  e.reason,
-                  e.changes
-                      .map(
-                        (c) =>
-                            '${c.field}: ${shownValue(c.field, c.before)} → ${shownValue(c.field, c.after)}',
-                      )
-                      .join('; '),
-                  e.ip.isEmpty ? '' : maskValue('IP address', e.ip),
-                  e.hash,
-                ],
-            ]),
-            mimeType: xlsxMimeType,
-          );
+      startDownload(
+        context,
+        ref,
+        'audit_log_${DateFormat('yyyy-MM-dd').format(now)}.xlsx',
+        buildXlsx('Audit log', [
+          [
+            'Event',
+            'Time',
+            'Actor',
+            'Role',
+            'Action',
+            'Entity',
+            'Scope',
+            'Summary',
+            'Reason',
+            'Changes (masked)',
+            'IP (masked)',
+            'Checksum',
+          ],
+          for (final e in shown)
+            [
+              e.id,
+              DateFormat('yyyy-MM-dd HH:mm:ss').format(e.at),
+              e.actorName,
+              e.actorRole,
+              e.action,
+              e.entityLabel,
+              e.scopeLabel.isEmpty ? branchName(e.branchId) : e.scopeLabel,
+              e.summary,
+              e.reason,
+              e.changes
+                  .map(
+                    (c) =>
+                        '${c.field}: ${shownValue(c.field, c.before)} → ${shownValue(c.field, c.after)}',
+                  )
+                  .join('; '),
+              e.ip.isEmpty ? '' : maskValue('IP address', e.ip),
+              e.hash,
+            ],
+        ]),
+        mimeType: xlsxMimeType,
+      );
       ref
           .read(auditRecorderProvider)
           .record(

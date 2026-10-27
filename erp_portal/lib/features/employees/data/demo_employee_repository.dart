@@ -1,9 +1,12 @@
 import '../../../core/errors/failure.dart';
 import '../../../core/permissions/system_roles.dart';
+import '../../organization/data/demo_organization_repository.dart'
+    show platformDemoOrganizations;
 import '../domain/custom_field.dart';
 import '../domain/employee.dart';
 import '../domain/employee_import.dart';
 import '../domain/employee_repository.dart';
+import '../domain/field_settings.dart';
 
 /// DEMO ONLY — employees kept in memory, seeded so the design's numbers
 /// (Meridian Textiles: 248 people, Ahmedabad HQ 126 · Surat 78 · Vadodara 44)
@@ -23,6 +26,23 @@ class DemoEmployeeRepository implements EmployeeRepository {
       domain: 'pateldyes.in',
       firstCode: 501,
     );
+    // DEMO ONLY — people for the extra platform organizations (D-75),
+    // seeded last so earlier record IDs don't change.
+    for (final (org, _, _, _, _, _, _, branches) in platformDemoOrganizations) {
+      var code = 101;
+      for (final (branch, _, _, _, people, _, _) in branches) {
+        if (people == 0) continue;
+        _seedGeneric(
+          org,
+          branch,
+          people,
+          domain: '${org.replaceFirst('org_', '')}.example.in',
+          firstCode: code,
+          accountMix: true,
+        );
+        code += people;
+      }
+    }
   }
 
   final Duration latency;
@@ -30,6 +50,7 @@ class DemoEmployeeRepository implements EmployeeRepository {
 
   final _employees = <String, List<Employee>>{};
   final _fields = <String, List<CustomField>>{};
+  final _fieldSettings = <String, EmployeeFieldSettings>{};
   final _imports = <String, List<ImportRecord>>{};
   int _nextId = 1;
 
@@ -715,8 +736,10 @@ class DemoEmployeeRepository implements EmployeeRepository {
     int count, {
     required String domain,
     required int firstCode,
+    bool accountMix = false,
   }) {
     final list = _list(org);
+    final head = list.length;
     final emails = <String>{};
     for (var i = 0; i < count; i++) {
       final first = _first[(i * 5 + 3) % _first.length];
@@ -740,10 +763,15 @@ class DemoEmployeeRepository implements EmployeeRepository {
           type: EmploymentType.fullTime,
           joiningDate: joined,
           branchId: branch,
-          managerId: i == 0 ? null : list.first.id,
+          managerId: i == 0 ? null : list[head].id,
           role: i == 0 ? SystemRole.branchManager : SystemRole.employee,
           shift: 'General',
-          accountStatus: AccountStatus.signedIn,
+          // Some people haven't accepted their invitation yet.
+          accountStatus: accountMix && i % 9 == 4
+              ? AccountStatus.invited
+              : (accountMix && i % 13 == 7
+                    ? AccountStatus.noAccount
+                    : AccountStatus.signedIn),
           hasAttendance: true,
           activity: [
             EmployeeActivity(
@@ -1068,6 +1096,35 @@ class DemoEmployeeRepository implements EmployeeRepository {
         'This person hasn’t set up their account yet. Resend the invitation instead.',
       );
     }
+  }
+
+  // ---------- Field settings (D-73) ----------
+
+  @override
+  Future<EmployeeFieldSettings> fieldSettings(String organizationId) async {
+    await _delay();
+    return _fieldSettings[organizationId] ?? const EmployeeFieldSettings();
+  }
+
+  @override
+  Future<EmployeeFieldSettings> saveFieldSettings(
+    String organizationId,
+    EmployeeFieldSettings settings, {
+    required String by,
+  }) async {
+    await _delay();
+    for (final MapEntry(key: f, value: rule) in settings.rules.entries) {
+      if (!f.allowed.contains(rule)) {
+        throw ValidationFailure(
+          '${f.label} can’t be ${rule.label.toLowerCase()}.',
+        );
+      }
+    }
+    return _fieldSettings[organizationId] = EmployeeFieldSettings(
+      rules: Map.unmodifiable(settings.rules),
+      updatedAt: _now(),
+      updatedBy: by,
+    );
   }
 
   // ---------- Custom fields ----------

@@ -51,8 +51,17 @@ class _HolidayImportScreenState extends ConsumerState<HolidayImportScreen> {
   bool _csv = false;
 
   Future<void> _pick(HolidayScope scope) async {
-    final picked = await ref.read(spreadsheetPickingProvider).pickSpreadsheet();
-    if (picked == null) return;
+    final PickedImage? chosen;
+    try {
+      chosen = await ref.read(spreadsheetPickingProvider).pickSpreadsheet();
+    } on Failure catch (f) {
+      if (mounted) {
+        showAppToast(context, f.message, icon: Icons.error_outline);
+      }
+      return;
+    }
+    final picked = chosen;
+    if (picked == null || !mounted) return;
     try {
       final table = readSpreadsheet(picked.name, picked.bytes);
       setState(() {
@@ -141,53 +150,54 @@ class _HolidayImportScreenState extends ConsumerState<HolidayImportScreen> {
         final name =
             'holidays_$year${_branch == null ? '' : '_${scope.branchName(_branch!).toLowerCase().replaceAll(' ', '_')}'}';
         if (_csv) {
-          ref
-              .read(fileDownloadsProvider)
-              .save(
-                '$name.csv',
-                csvBytes(buildCsv(table)),
-                mimeType: csvMimeType,
-              );
+          startDownload(
+            context,
+            ref,
+            '$name.csv',
+            csvBytes(buildCsv(table)),
+            mimeType: csvMimeType,
+            done: '${toExport.length} holidays exported',
+          );
         } else {
-          ref
-              .read(fileDownloadsProvider)
-              .save(
-                '$name.xlsx',
-                buildXlsx('Holidays $year', table),
-                mimeType: xlsxMimeType,
-              );
+          startDownload(
+            context,
+            ref,
+            '$name.xlsx',
+            buildXlsx('Holidays $year', table),
+            mimeType: xlsxMimeType,
+            done: '${toExport.length} holidays exported',
+          );
         }
-        showAppToast(context, '${toExport.length} holidays exported');
       }
 
       void template() {
-        ref
-            .read(fileDownloadsProvider)
-            .save(
-              'holiday_import_template.xlsx',
-              buildXlsx('Holidays', [
-                holidayTemplateHeaders,
-                [
-                  '14/01/${scope.today.year + 1}',
-                  'Uttarayan',
-                  'All branches',
-                  'Festival',
-                ],
-                [
-                  '28/08/${scope.today.year + 1}',
-                  'Raksha Bandhan',
-                  'Surat',
-                  'Festival',
-                ],
-                [
-                  '25/12/${scope.today.year + 1}',
-                  'Christmas',
-                  'Optional',
-                  'Festival',
-                ],
-              ]),
-              mimeType: xlsxMimeType,
-            );
+        startDownload(
+          context,
+          ref,
+          'holiday_import_template.xlsx',
+          buildXlsx('Holidays', [
+            holidayTemplateHeaders,
+            [
+              '14/01/${scope.today.year + 1}',
+              'Uttarayan',
+              'All branches',
+              'Festival',
+            ],
+            [
+              '28/08/${scope.today.year + 1}',
+              'Raksha Bandhan',
+              'Surat',
+              'Festival',
+            ],
+            [
+              '25/12/${scope.today.year + 1}',
+              'Christmas',
+              'Optional',
+              'Festival',
+            ],
+          ]),
+          mimeType: xlsxMimeType,
+        );
       }
 
       final importCard = AppCard(

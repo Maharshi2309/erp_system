@@ -1,12 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/errors/failure.dart';
 import '../../../../core/permissions/permissions.dart';
 import '../../../../core/utils/image_picking.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../organization/presentation/providers/organization_providers.dart';
 import '../../data/spreadsheet.dart';
 import '../../domain/employee_import.dart';
+import '../../domain/field_settings.dart';
 import 'employee_providers.dart';
 
 enum ImportStep {
@@ -46,6 +48,7 @@ class ImportState {
     this.committing = false,
     this.record,
     this.error,
+    this.fieldSettings = const EmployeeFieldSettings(),
   });
 
   final ImportStep step;
@@ -67,6 +70,9 @@ class ImportState {
   final bool committing;
   final ImportRecord? record;
   final String? error;
+
+  /// Built-in field rules when the file was read (D-73).
+  final EmployeeFieldSettings fieldSettings;
 
   ImportPlan get plan => ImportPlan.from(rows, policy);
 
@@ -110,7 +116,7 @@ class ImportState {
 
   bool get canValidate =>
       table != null &&
-      unmappedRequired(mapping).isEmpty &&
+      unmappedRequired(mapping, fieldSettings).isEmpty &&
       doubleMapped.isEmpty &&
       (dateOrder != null || !needsDateOrder(table!, mapping));
 
@@ -136,6 +142,7 @@ class ImportState {
     bool? committing,
     Object? record = _keep,
     Object? error = _keep,
+    EmployeeFieldSettings? fieldSettings,
   }) => ImportState(
     step: step ?? this.step,
     reading: reading ?? this.reading,
@@ -156,6 +163,7 @@ class ImportState {
     committing: committing ?? this.committing,
     record: identical(record, _keep) ? this.record : record as ImportRecord?,
     error: identical(error, _keep) ? this.error : error as String?,
+    fieldSettings: fieldSettings ?? this.fieldSettings,
   );
 }
 
@@ -173,7 +181,15 @@ class ImportController extends Notifier<ImportState> {
   void reset() => state = const ImportState();
 
   Future<void> pickFile() async {
-    final picked = await ref.read(spreadsheetPickingProvider).pickSpreadsheet();
+    final PickedImage? picked;
+    try {
+      picked = await ref.read(spreadsheetPickingProvider).pickSpreadsheet();
+    } on Failure catch (f) {
+      state = state.copyWith(
+        problem: ImportFileProblem('The file couldn’t be opened', f.message),
+      );
+      return;
+    }
     if (picked == null) return;
     await loadFile(picked.name, picked.bytes);
   }
@@ -186,11 +202,13 @@ class ImportController extends Notifier<ImportState> {
     try {
       final table = readSpreadsheet(name, bytes);
       final fields = await ref.read(customFieldsProvider.future);
+      final settings = await ref.read(fieldSettingsProvider.future);
       state = state.copyWith(
         reading: false,
         table: table,
         problem: null,
-        mapping: autoMatchColumns(table.headers, fields),
+        fieldSettings: settings,
+        mapping: autoMatchColumns(table.headers, fields, settings),
       );
     } on ImportFileProblem catch (p) {
       state = state.copyWith(reading: false, problem: p, table: null);
@@ -230,6 +248,7 @@ class ImportController extends Notifier<ImportState> {
         fields: fields,
         dateOrder: state.dateOrder,
         sendInvites: state.sendInvites,
+        settings: state.fieldSettings,
       ),
     );
     state = state.copyWith(

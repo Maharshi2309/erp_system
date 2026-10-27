@@ -98,6 +98,10 @@ class AdminDashboardScreen extends ConsumerWidget {
       for (final b in branchesValue.value ?? const <Branch>[])
         if (session.coversBranch(b.id)) b,
     ];
+    // Branch-scoped members (who can open this page by URL) see only theirs.
+    final allBranches = session.branchIds.isEmpty
+        ? 'All branches'
+        : 'All my branches';
     final m = DashboardMetrics.compute(
       employees: employees.value!,
       branches: branches,
@@ -340,9 +344,17 @@ class AdminDashboardScreen extends ConsumerWidget {
                     ],
                   ),
           );
-          final attention = DashboardPanel(
+          // Only items the member can open: import results need the
+          // import permission (D-81).
+          final attention = [
+            for (final a in m.attention)
+              if (a.kind != AttentionKind.import ||
+                  session.permissions.canView(PermissionModule.importExport))
+                a,
+          ];
+          final attentionPanel = DashboardPanel(
             title: 'Needs attention',
-            child: m.attention.isEmpty && missing == 0
+            child: attention.isEmpty && missing == 0
                 ? const Text(
                     'Nothing needs attention.',
                     style: AppTypography.small,
@@ -361,7 +373,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                           ),
                           onTap: () => context.go(AppRoutes.missingPunches),
                         ),
-                      for (final a in m.attention)
+                      for (final a in attention)
                         AttentionRow(
                           item: a,
                           onTap: () => switch (a.kind) {
@@ -525,7 +537,7 @@ class AdminDashboardScreen extends ConsumerWidget {
               ),
               Text(
                 '${DateFormat(phone ? 'EEE d MMM' : 'EEEE, d MMMM y').format(now)} · '
-                '${selected?.name ?? 'All branches'} · '
+                '${selected?.name ?? allBranches} · '
                 '${selected == null ? '${active.length} ${active.length == 1 ? 'branch' : 'branches'}, ' : ''}'
                 '${m.total} ${m.total == 1 ? 'employee' : 'employees'}',
                 style: AppTypography.small,
@@ -565,7 +577,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                   children: [
                     Expanded(child: approvals),
                     const SizedBox(width: AppSpacing.lg),
-                    Expanded(child: attention),
+                    Expanded(child: attentionPanel),
                     if (isOwner) ...[
                       const SizedBox(width: AppSpacing.lg),
                       Expanded(
@@ -587,7 +599,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                   minItemWidth: 280,
                   maxColumns: 2,
                   spacing: AppSpacing.lg,
-                  children: [headcount, attention],
+                  children: [headcount, attentionPanel],
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 approvals,

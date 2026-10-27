@@ -90,7 +90,7 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final branches = ref.watch(branchesProvider);
+    final branches = ref.watch(visibleBranchesProvider);
     final organization = ref.watch(organizationProvider).value;
     final canEdit =
         ref

@@ -453,7 +453,24 @@ class _ExportRow extends ConsumerWidget {
               StatusBadge(label: label, tone: tone),
               if (!r.failed && !expired)
                 TextButton(
-                  onPressed: () => ref.read(reportServiceProvider).download(r),
+                  onPressed: () async {
+                    try {
+                      final saved = await ref
+                          .read(reportServiceProvider)
+                          .download(r);
+                      if (saved && context.mounted) {
+                        showAppToast(context, 'Download saved');
+                      }
+                    } on Object {
+                      if (context.mounted) {
+                        showAppToast(
+                          context,
+                          'Couldn’t save the file. Try again.',
+                          icon: Icons.error_outline,
+                        );
+                      }
+                    }
+                  },
                   child: Text(
                     'Download ${r.format} · ${r.size < 1024 ? '<1' : (r.size / 1024).round()} KB',
                     semanticsLabel: 'Download ${r.kind.label}',

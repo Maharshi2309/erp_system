@@ -117,4 +117,7 @@ class LeaveScopeData {
 
   bool get canEdit =>
       session.permissions.can(PermissionModule.leave, PermissionAction.edit);
+
+  bool get canExport =>
+      session.permissions.can(PermissionModule.leave, PermissionAction.export);
 }

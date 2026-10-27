@@ -129,44 +129,44 @@ class _LeaveRequestsScreenState extends ConsumerState<LeaveRequestsScreen> {
           : base.where((r) => displayStatus(r) == _status).toList();
 
       void export() {
-        ref
-            .read(fileDownloadsProvider)
-            .save(
-              'leave_requests_${isoDate(book.today)}.xlsx',
-              buildXlsx('Leave requests', [
-                [
-                  'Request',
-                  'Sent',
-                  'Employee ID',
-                  'Name',
-                  'Branch',
-                  'Type',
-                  'From',
-                  'To',
-                  'Half day',
-                  'Days',
-                  'Status',
-                  'Decision',
-                ],
-                for (final r in rows)
-                  [
-                    r.id,
-                    isoDate(r.createdAt),
-                    book.person(r.employeeId)?.code ?? '',
-                    book.person(r.employeeId)?.fullName ?? '',
-                    branchName(book.person(r.employeeId)?.branchId),
-                    book.data.type(r.typeKey)?.name ?? r.typeKey,
-                    isoDate(r.from),
-                    isoDate(r.to),
-                    r.half == HalfDay.full ? '' : r.half.label,
-                    formatDays(book.daysOf(r)),
-                    displayStatus(r),
-                    decisionText(book, r, now),
-                  ],
-              ]),
-              mimeType: xlsxMimeType,
-            );
-        showAppToast(context, '${rows.length} requests exported');
+        startDownload(
+          context,
+          ref,
+          'leave_requests_${isoDate(book.today)}.xlsx',
+          buildXlsx('Leave requests', [
+            [
+              'Request',
+              'Sent',
+              'Employee ID',
+              'Name',
+              'Branch',
+              'Type',
+              'From',
+              'To',
+              'Half day',
+              'Days',
+              'Status',
+              'Decision',
+            ],
+            for (final r in rows)
+              [
+                r.id,
+                isoDate(r.createdAt),
+                book.person(r.employeeId)?.code ?? '',
+                book.person(r.employeeId)?.fullName ?? '',
+                branchName(book.person(r.employeeId)?.branchId),
+                book.data.type(r.typeKey)?.name ?? r.typeKey,
+                isoDate(r.from),
+                isoDate(r.to),
+                r.half == HalfDay.full ? '' : r.half.label,
+                formatDays(book.daysOf(r)),
+                displayStatus(r),
+                decisionText(book, r, now),
+              ],
+          ]),
+          mimeType: xlsxMimeType,
+          done: '${rows.length} requests exported',
+        );
       }
 
       return Column(
@@ -185,12 +185,13 @@ class _LeaveRequestsScreenState extends ConsumerState<LeaveRequestsScreen> {
                   style: AppTypography.pageTitle,
                 ),
               ),
-              AppButton(
-                label: 'Export',
-                icon: Icons.download_outlined,
-                variant: AppButtonVariant.secondary,
-                onPressed: rows.isEmpty ? null : export,
-              ),
+              if (scope.canExport)
+                AppButton(
+                  label: 'Export',
+                  icon: Icons.download_outlined,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: rows.isEmpty ? null : export,
+                ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
@@ -458,40 +459,40 @@ class _LeaveBalancesScreenState extends ConsumerState<LeaveBalancesScreen> {
       ]..sort((a, b) => a.fullName.compareTo(b.fullName));
 
       void export() {
-        ref
-            .read(fileDownloadsProvider)
-            .save(
-              'leave_balances_$year.xlsx',
-              buildXlsx('Leave balances', [
-                [
-                  'Employee ID',
-                  'Name',
-                  for (final t in types) ...[
-                    '${t.name} granted',
-                    '${t.name} used',
-                    '${t.name} pending',
-                    '${t.name} available',
-                  ],
-                ],
-                for (final e in people)
-                  [
-                    e.code,
-                    e.fullName,
-                    for (final t in types)
-                      ...() {
-                        final b = book.balance(e, t.key, year);
-                        return [
-                          formatDays(b.total),
-                          formatDays(b.used),
-                          formatDays(b.pending),
-                          formatDays(b.available),
-                        ];
-                      }(),
-                  ],
-              ]),
-              mimeType: xlsxMimeType,
-            );
-        showAppToast(context, 'Balances for ${people.length} people exported');
+        startDownload(
+          context,
+          ref,
+          'leave_balances_$year.xlsx',
+          buildXlsx('Leave balances', [
+            [
+              'Employee ID',
+              'Name',
+              for (final t in types) ...[
+                '${t.name} granted',
+                '${t.name} used',
+                '${t.name} pending',
+                '${t.name} available',
+              ],
+            ],
+            for (final e in people)
+              [
+                e.code,
+                e.fullName,
+                for (final t in types)
+                  ...() {
+                    final b = book.balance(e, t.key, year);
+                    return [
+                      formatDays(b.total),
+                      formatDays(b.used),
+                      formatDays(b.pending),
+                      formatDays(b.available),
+                    ];
+                  }(),
+              ],
+          ]),
+          mimeType: xlsxMimeType,
+          done: 'Balances for ${people.length} people exported',
+        );
       }
 
       final table = people.isEmpty
@@ -588,12 +589,13 @@ class _LeaveBalancesScreenState extends ConsumerState<LeaveBalancesScreen> {
                   style: AppTypography.pageTitle,
                 ),
               ),
-              AppButton(
-                label: 'Export balances',
-                icon: Icons.download_outlined,
-                variant: AppButtonVariant.secondary,
-                onPressed: people.isEmpty ? null : export,
-              ),
+              if (scope.canExport)
+                AppButton(
+                  label: 'Export balances',
+                  icon: Icons.download_outlined,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: people.isEmpty ? null : export,
+                ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),

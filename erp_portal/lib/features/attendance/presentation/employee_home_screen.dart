@@ -1,8 +1,11 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../app/config/app_config.dart';
 import '../../../app/router/route_names.dart';
 import '../../../core/errors/failure.dart';
 import '../../../core/responsive/responsive_grid.dart';
@@ -14,6 +17,7 @@ import '../../../core/utils/clock.dart';
 import '../../../core/utils/zoned_time.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/selection_controls.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../../core/widgets/state_views.dart';
 import '../../auth/presentation/providers/auth_providers.dart';
@@ -28,6 +32,7 @@ import '../domain/attendance.dart';
 import '../domain/attendance_book.dart';
 import 'attendance_providers.dart';
 import 'attendance_widgets.dart';
+import 'selfie_capture.dart';
 
 /// Board S86 — the employee's home with punch in / out.
 class EmployeeHomeScreen extends ConsumerStatefulWidget {
@@ -44,8 +49,26 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
   /// Kept until the server confirms, so a retry can't record twice.
   String? _requestId;
 
-  Future<void> _punch(PunchKind kind) async {
+  /// The last punch's selfie result, shown under the button.
+  FaceCheck? _face;
+
+  /// Kept with [_requestId] so a retry sends the same selfie.
+  Uint8List? _selfie;
+
+  Future<void> _punch(PunchKind kind, {required bool selfie}) async {
     if (_pending) return;
+    if (selfie && _selfie == null) {
+      final photo = await ref
+          .read(selfieCaptureProvider)
+          .capture(
+            context,
+            title: kind.label,
+            instruction:
+                'Hold the phone at eye level and fit your face in the oval.',
+          );
+      if (photo == null || !mounted) return;
+      _selfie = photo;
+    }
     _requestId ??=
         '${ref.read(clockProvider)().microsecondsSinceEpoch}-${kind.name}';
     setState(() {
@@ -53,11 +76,17 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
       _failed = false;
     });
     try {
-      await ref
+      final p = await ref
           .read(attendanceDataProvider.notifier)
-          .punch(kind, requestId: _requestId!);
+          .punch(kind, requestId: _requestId!, selfie: _selfie);
       _requestId = null;
-      if (mounted) setState(() => _pending = false);
+      _selfie = null;
+      if (mounted) {
+        setState(() {
+          _pending = false;
+          _face = p.face;
+        });
+      }
     } on NetworkFailure {
       if (mounted) {
         setState(() {
@@ -67,6 +96,7 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
       }
     } on Failure catch (f) {
       _requestId = null;
+      _selfie = null;
       if (mounted) {
         setState(() => _pending = false);
         ScaffoldMessenger.of(
@@ -115,6 +145,9 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
     final closedMinutes = record.workedMinutes;
     final clock = ref.read(clockProvider);
     final local = wallTime(clock(), zone);
+    final selfie = b.needsSelfie(self);
+    final faceProfile = b.data.faceProfileOf(self.id);
+    final showDemo = selfie && ref.watch(appConfigProvider).showDevTools;
     final expected = shift?.expected ?? 8 * 60;
 
     final statusLabel = _pending
@@ -263,8 +296,29 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
               ),
             ),
           ],
+          if (_face case final face?) ...[
+            const SizedBox(height: AppSpacing.md),
+            Semantics(liveRegion: true, child: _FaceResultNote(face: face)),
+          ],
+          if (showDemo) ...[
+            const SizedBox(height: AppSpacing.md),
+            const Text(
+              'Demo only — face matcher answer',
+              style: AppTypography.helper,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            ChoiceChips<FaceResult>(
+              options: const [
+                (FaceResult.verified, 'Match'),
+                (FaceResult.notMatched, 'No match'),
+              ],
+              selected: ref.watch(demoFaceOutcomeProvider),
+              onSelected: ref.read(demoFaceOutcomeProvider.notifier).set,
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           AppButton(
+            icon: selfie ? Icons.photo_camera_outlined : null,
             label: open != null ? 'Punch out' : 'Punch in',
             busy: _pending,
             busyLabel: open != null ? 'Punching out…' : 'Punching in…',
@@ -273,8 +327,10 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
             variant: open != null
                 ? AppButtonVariant.dangerOutline
                 : AppButtonVariant.primary,
-            onPressed: () =>
-                _punch(open != null ? PunchKind.punchOut : PunchKind.punchIn),
+            onPressed: () => _punch(
+              open != null ? PunchKind.punchOut : PunchKind.punchIn,
+              selfie: selfie,
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
           Wrap(
@@ -282,7 +338,8 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
             spacing: AppSpacing.md,
             children: [
               Text(
-                'Expected ${formatMinutes(expected)} · $allowedBreakMinutes m break',
+                'Expected ${formatMinutes(expected)} · $allowedBreakMinutes m break'
+                '${selfie ? ' · selfie with each punch' : ''}',
                 style: AppTypography.helper,
               ),
               TextLink(
@@ -312,6 +369,24 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
             style: AppTypography.small,
           ),
           const SizedBox(height: AppSpacing.lg),
+          if (selfie && faceProfile?.status != FaceEnrolStatus.approved) ...[
+            _Notice(
+              icon: Icons.face_retouching_natural_outlined,
+              text: switch (faceProfile?.status) {
+                FaceEnrolStatus.pending =>
+                  'Your face set-up is waiting for HR approval. Until then, your manager checks each punch selfie.',
+                FaceEnrolStatus.rejected =>
+                  'Your face set-up wasn’t approved: “${faceProfile!.rejectReason}”. Set it up again so punches can be verified.',
+                _ =>
+                  '${branch?.name ?? 'Your branch'} uses selfie punches. Set up your face once so they can be verified.',
+              },
+              action: faceProfile?.status == FaceEnrolStatus.pending
+                  ? 'View'
+                  : 'Set up',
+              onView: () => context.go(AppRoutes.myFace),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           punchCard,
           if (corrected != null) ...[
             const SizedBox(height: AppSpacing.md),
@@ -419,10 +494,17 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
 }
 
 class _Notice extends StatelessWidget {
-  const _Notice({required this.text, required this.onView});
+  const _Notice({
+    required this.text,
+    required this.onView,
+    this.icon = Icons.edit_note,
+    this.action = 'View',
+  });
 
   final String text;
   final VoidCallback onView;
+  final IconData icon;
+  final String action;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -433,7 +515,7 @@ class _Notice extends StatelessWidget {
     ),
     child: Row(
       children: [
-        const Icon(Icons.edit_note, color: AppColors.primary),
+        Icon(icon, color: AppColors.primary),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
           child: Text(
@@ -441,10 +523,48 @@ class _Notice extends StatelessWidget {
             style: AppTypography.small.copyWith(color: AppColors.textPrimary),
           ),
         ),
-        TextLink('View', onTap: onView),
+        TextLink(action, onTap: onView),
       ],
     ),
   );
+}
+
+/// "Face verified", or why the punch went to review.
+class _FaceResultNote extends StatelessWidget {
+  const _FaceResultNote({required this.face});
+
+  final FaceCheck face;
+
+  @override
+  Widget build(BuildContext context) {
+    final ok = !face.needsReview;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: ok ? AppColors.successSoft : AppColors.warningSoft,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            ok ? Icons.verified_user_outlined : Icons.pending_outlined,
+            color: ok ? AppColors.success : AppColors.warning,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              ok
+                  ? 'Face verified.'
+                  : '${face.result.label}. Your punch is saved, and your manager will check the selfie.',
+              style: AppTypography.small.copyWith(
+                color: ok ? AppColors.successText : AppColors.warningText,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _LeaveTiles extends ConsumerWidget {

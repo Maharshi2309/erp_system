@@ -6,6 +6,10 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Staffline uses the camera for attendance selfies when your branch asks for one.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Staffline never records sound. The camera is used only for attendance selfies.</string>
 	<key>CFBundleDisplayName</key>
 	<string>Erp Portal</string>
 	<key>CFBundleExecutable</key>

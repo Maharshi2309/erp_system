@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:erp_portal/core/errors/failure.dart';
 import 'package:erp_portal/core/utils/image_picking.dart';
+import 'package:erp_portal/core/utils/validators.dart';
 import 'package:erp_portal/features/organization/data/demo_organization_repository.dart';
 import 'package:erp_portal/features/organization/domain/branch.dart';
 import 'package:erp_portal/features/organization/domain/branch_validation.dart';
@@ -157,7 +158,7 @@ void main() {
         code: 'ahm-01',
       );
       expect(errors['name'], 'You already have a branch with this name.');
-      expect(errors['pin'], 'PIN codes have 6 digits.');
+      expect(errors['pin'], Validators.pinMessage);
       expect(errors['email'], 'Check the email address.');
       expect(errors['code'], contains('AHM-01 is already used'));
       expect(errors['hours'], 'Open the branch on at least one day.');

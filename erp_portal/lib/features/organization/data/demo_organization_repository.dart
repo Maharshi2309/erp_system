@@ -155,6 +155,7 @@ class DemoOrganizationRepository implements OrganizationRepository {
       id: patel,
       name: 'Patel Dyes & Chemicals',
       employeeRange: '11–50',
+      industry: 'Chemicals',
       address: 'GIDC Phase 2',
       city: 'Vapi',
       state: 'Gujarat',
@@ -183,7 +184,51 @@ class DemoOrganizationRepository implements OrganizationRepository {
         reviewed: true,
       ),
     ];
+    _seedPlatformDemo();
   }
+
+  /// DEMO ONLY — more customers, so the platform statistics (D-75) have a
+  /// realistic spread of sizes, industries, states and sign-up dates.
+  void _seedPlatformDemo() {
+    for (final (id, name, industry, range, city, state, created, branches)
+        in platformDemoOrganizations) {
+      _organizations[id] = Organization(
+        id: id,
+        name: name,
+        employeeRange: range,
+        industry: industry,
+        city: city,
+        state: state,
+        createdAt: created,
+      );
+      _branches[id] = [
+        for (final (bid, bname, code, bcity, people, complete, selfie)
+            in branches)
+          Branch(
+            id: bid,
+            name: bname,
+            code: code,
+            address: '$bname industrial area',
+            city: bcity,
+            state: state,
+            pin: '400001',
+            hours: HoursPresets.monSat930,
+            employeeCount: people,
+            attendance: complete ? AttendanceRules(selfieCheck: selfie) : null,
+            holidays: complete
+                ? HolidaySetup.from(HolidaySource.national)
+                : null,
+            leave: complete ? LeaveSetup.defaults : null,
+            roles: complete ? const RolesSetup() : null,
+            reviewed: complete,
+            openedOn: created,
+          ),
+      ];
+    }
+  }
+
+  /// Organization IDs held in the demo store (platform statistics only).
+  List<String> get organizationIds => List.unmodifiable(_organizations.keys);
 
   Organization _org(String id) {
     final org = _organizations[id];
@@ -408,3 +453,95 @@ class DemoOrganizationRepository implements OrganizationRepository {
     _bookmarks[organizationId] = bookmark;
   }
 }
+
+/// DEMO ONLY — extra organizations for the platform statistics (D-75):
+/// (id, name, industry, size, city, state, created, branches) where each
+/// branch is (id, name, code, city, employees, setup complete, selfie).
+final platformDemoOrganizations =
+    <
+      (
+        String,
+        String,
+        String,
+        String,
+        String,
+        String,
+        DateTime,
+        List<(String, String, String, String, int, bool, bool)>,
+      )
+    >[
+      (
+        'org_sabarmati',
+        'Sabarmati Retail',
+        'Retail',
+        '51–200',
+        'Ahmedabad',
+        'Gujarat',
+        DateTime(2025, 11, 18),
+        [
+          ('b-nav', 'Navrangpura', 'NAV-01', 'Ahmedabad', 28, true, false),
+          ('b-man', 'Maninagar', 'MAN-01', 'Ahmedabad', 22, true, false),
+          ('b-bop', 'Bopal', 'BOP-01', 'Ahmedabad', 15, false, false),
+        ],
+      ),
+      (
+        'org_kaveri-foods',
+        'Kaveri Foods',
+        'Food processing',
+        '51–200',
+        'Bengaluru',
+        'Karnataka',
+        DateTime(2026, 1, 12),
+        [
+          ('b-pee', 'Peenya', 'PEE-01', 'Bengaluru', 60, true, true),
+          ('b-hos', 'Hosur', 'HOS-01', 'Hosur', 35, true, false),
+        ],
+      ),
+      (
+        'org_narmada-log',
+        'Narmada Logistics',
+        'Logistics',
+        '51–200',
+        'Vadodara',
+        'Gujarat',
+        DateTime(2026, 4, 6),
+        [
+          ('b-sav', 'Savli', 'SAV-01', 'Vadodara', 40, true, false),
+          ('b-hal', 'Halol', 'HAL-01', 'Halol', 18, true, false),
+        ],
+      ),
+      (
+        'org_shree-care',
+        'Shree Care Clinics',
+        'Healthcare',
+        '11–50',
+        'Pune',
+        'Maharashtra',
+        DateTime(2026, 7, 21),
+        [
+          ('b-kot', 'Kothrud', 'KOT-01', 'Pune', 14, true, true),
+          ('b-ban', 'Baner', 'BAN-01', 'Pune', 11, true, true),
+          ('b-had', 'Hadapsar', 'HAD-01', 'Pune', 9, false, false),
+        ],
+      ),
+      (
+        'org_indus-print',
+        'Indus Print House',
+        'Printing',
+        '11–50',
+        'Rajkot',
+        'Gujarat',
+        DateTime(2026, 9, 2),
+        [('b-ind', 'Aji GIDC', 'AJI-01', 'Rajkot', 18, true, false)],
+      ),
+      (
+        'org_coastal-craft',
+        'Coastal Craft Exports',
+        'Handicrafts',
+        '1–10',
+        'Kochi',
+        'Kerala',
+        DateTime(2026, 10, 12),
+        [('b-koc', 'Kochi', 'KOC-01', 'Kochi', 0, false, false)],
+      ),
+    ];

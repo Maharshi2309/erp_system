@@ -28,6 +28,7 @@ const attendancePages = [
   ('Corrections', AppRoutes.corrections),
   ('Monthly summary', AppRoutes.monthlySummary),
   ('Exports', AppRoutes.attendanceExports),
+  ('Face check', AppRoutes.faceCheck),
 ];
 
 /// What every attendance admin page needs.

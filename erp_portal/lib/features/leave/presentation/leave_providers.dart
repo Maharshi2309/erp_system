@@ -45,14 +45,16 @@ class LeaveNotifier extends AsyncNotifier<LeaveData> {
     if (session == null) throw const PermissionFailure();
     final repo = ref.watch(leaveRepositoryProvider);
     if (repo is DemoLeaveRepository && !repo.isSeeded(session.organizationId)) {
-      repo.ensureSeeded(
-        session.organizationId,
-        employees: await ref
-            .read(employeeRepositoryProvider)
-            .employees(session.organizationId),
-        branches: await ref
+      final (employees, branches) = await (
+        ref.read(employeeRepositoryProvider).employees(session.organizationId),
+        ref
             .read(organizationRepositoryProvider)
             .branches(session.organizationId),
+      ).wait;
+      repo.ensureSeeded(
+        session.organizationId,
+        employees: employees,
+        branches: branches,
       );
     }
     return repo.load(session.organizationId);

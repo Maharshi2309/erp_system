@@ -71,7 +71,8 @@ void main() {
 
     test('system roles keep the built-in grants', () {
       // Every applicable cell of the matrix.
-      expect(role('owner').grants.grants.length, 37);
+      // 37 + Employee fields view/edit (D-73).
+      expect(role('owner').grants.grants.length, 39);
       expect(
         role(
           'hrAdmin',

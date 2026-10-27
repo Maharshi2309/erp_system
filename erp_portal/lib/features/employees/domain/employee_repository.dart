@@ -1,6 +1,7 @@
 import 'custom_field.dart';
 import 'employee.dart';
 import 'employee_import.dart';
+import 'field_settings.dart';
 
 /// Employee records, custom field definitions and imports. Implementations
 /// throw a `Failure` when an operation is refused.
@@ -58,6 +59,15 @@ abstract interface class EmployeeRepository {
   int countInBranch(String organizationId, String branchId);
 
   Future<List<CustomField>> customFields(String organizationId);
+
+  /// Which built-in fields are required, optional or hidden (D-73).
+  Future<EmployeeFieldSettings> fieldSettings(String organizationId);
+
+  Future<EmployeeFieldSettings> saveFieldSettings(
+    String organizationId,
+    EmployeeFieldSettings settings, {
+    required String by,
+  });
 
   /// Creates or updates a field. [renamedOptions] (old → new) also updates
   /// employees' saved values; options in use can be renamed, not removed.

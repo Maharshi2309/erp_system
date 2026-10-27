@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
-/// Non-web builds (tests): downloads are not supported.
+/// Apps use the system save dialog instead (see file_download.dart); this
+/// browser-only path is never reached outside the web.
 void saveBytes(String fileName, Uint8List bytes, String mimeType) =>
-    throw UnsupportedError('File downloads are only available on the web.');
+    throw UnsupportedError('Browser downloads only exist on the web.');

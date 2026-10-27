@@ -9,12 +9,17 @@ class UserAccount {
     required this.fullName,
     required this.email,
     this.employeeId,
+    this.isPlatformAdmin = false,
   });
 
   final String id;
   final String fullName;
   final String email;
   final String? employeeId;
+
+  /// Staffline's own super admin: sees platform statistics only, never an
+  /// organization's records (D-75). Has no memberships.
+  final bool isPlatformAdmin;
 }
 
 enum MembershipStatus { active, deactivated }

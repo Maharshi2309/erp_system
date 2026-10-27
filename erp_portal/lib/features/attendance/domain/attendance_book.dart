@@ -235,7 +235,13 @@ class AttendanceBook {
         }
       }
     }
+    final rejected = {
+      for (final r in data.faceReviews)
+        if (!r.accepted) r.punchId,
+    };
     for (final p in data.punches) {
+      // A selfie punch a reviewer rejected doesn't count (D-70).
+      if (rejected.contains(p.id)) continue;
       (_punchesOf[p.employeeId] ??= []).add(p);
     }
     for (final c in data.corrections) {
@@ -265,6 +271,10 @@ class AttendanceBook {
   final _dayCache = <(String, DateTime), DayRecord>{};
 
   Branch? branchOf(Employee e) => _branches[e.branchId];
+
+  /// Whether [e] must take a selfie when punching (D-70).
+  bool needsSelfie(Employee e) =>
+      branchOf(e)?.attendance?.selfieCheck == true && !data.isFaceExempt(e.id);
 
   String zoneOf(Employee e) => _branches[e.branchId]?.timeZone ?? orgZone;
 

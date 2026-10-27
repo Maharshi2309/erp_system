@@ -46,6 +46,13 @@ enum NotifyEvent {
   missingPunch('Attendance', 'Missing punch at end of day', '111000'),
   correctionDecided('Attendance', 'Correction approved or rejected', '11N0N0'),
   repeatedLateness('Attendance', 'Repeated lateness (3 in a month)', 'NN1110'),
+  faceFlagged('Attendance', 'Punch selfie needs review', 'NN1010'),
+  faceEnrolSubmitted(
+    'Attendance',
+    'Face set-up waiting for approval',
+    'NNNN10',
+  ),
+  faceDecided('Attendance', 'Face set-up or selfie review decided', '10N0N0'),
   invitation('People & account', 'Invitation to join', 'LLNNNN'),
   profileChanged('People & account', 'Profile changed by HR', '11NNNN'),
   inviteBounced('People & account', 'Invitation not delivered', 'NNNN11'),

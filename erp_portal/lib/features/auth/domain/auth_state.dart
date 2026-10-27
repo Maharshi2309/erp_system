@@ -55,3 +55,11 @@ final class SignedIn extends AuthState {
   final AppSession session;
   final List<OrganizationMembership> memberships;
 }
+
+/// The platform super admin is signed in (D-75). There is no organization
+/// session, so no organization page or record can be opened.
+final class PlatformSignedIn extends AuthState {
+  const PlatformSignedIn(this.account);
+
+  final UserAccount account;
+}

@@ -149,6 +149,30 @@ void main() {
     ('s52_attendance_phone_390', const Size(390, 2400), AppRoutes.attendance),
   ];
 
+  // Platform super admin, statistics only (D-75).
+  for (final (name, size, route) in <(String, Size, String)>[
+    ('s97_platform_1440', const Size(1440, 2700), AppRoutes.platform),
+    (
+      's98_platform_org_1440',
+      const Size(1440, 1200),
+      AppRoutes.platformOrg('org_meridian-tex'),
+    ),
+    ('s97_platform_phone_390', const Size(390, 5200), AppRoutes.platform),
+  ]) {
+    testWidgets(name, (tester) async {
+      await pumpStafflineApp(
+        tester,
+        signInAs: DemoAuthRepository.platformAdminEmail,
+        size: size,
+        location: route,
+      );
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('output/$name.png'),
+      );
+    });
+  }
+
   for (final (name, size, route) in shots) {
     testWidgets(name, (tester) async {
       await pumpStafflineApp(tester, size: size, location: route);

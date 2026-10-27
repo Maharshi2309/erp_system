@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'attendance.dart';
 
 /// Punches, corrections and requests. Implementations throw a `Failure`
@@ -13,6 +15,7 @@ abstract interface class AttendanceRepository {
     required PunchKind kind,
     required PunchSource source,
     required String requestId,
+    Uint8List? selfie,
   });
 
   /// Saves a correction. With [needsSecondApproval] it waits as pending.
@@ -38,6 +41,43 @@ abstract interface class AttendanceRepository {
     String organizationId,
     String requestId, {
     required String reason,
+  });
+
+  /// Saves the employee's consent and enrolment selfies; waits for HR.
+  /// Replaces an earlier enrolment.
+  Future<FaceProfile> enrolFace(
+    String organizationId, {
+    required String employeeId,
+    required List<Uint8List> photos,
+  });
+
+  /// HR approves or rejects an enrolment (a rejection needs a reason).
+  Future<FaceProfile> decideFace(
+    String organizationId,
+    String employeeId, {
+    required bool approve,
+    required String by,
+    String reason = '',
+  });
+
+  /// The employee withdraws consent: their face data is deleted.
+  Future<void> deleteFace(String organizationId, String employeeId);
+
+  /// Lets someone punch without a selfie, or ends that (null reason).
+  Future<void> setFaceExemption(
+    String organizationId,
+    String employeeId, {
+    required String? reason,
+    required String by,
+  });
+
+  /// Accepts or rejects a punch whose face wasn't verified.
+  Future<FaceReview> reviewFacePunch(
+    String organizationId,
+    String punchId, {
+    required bool accept,
+    required String by,
+    String note = '',
   });
 
   /// Records reminders; returns how many were sent.

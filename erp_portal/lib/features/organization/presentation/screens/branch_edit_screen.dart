@@ -96,6 +96,7 @@ class _BranchEditScreenState extends ConsumerState<BranchEditScreen> {
       city: _t('city'),
       pin: _t('pin'),
       email: _t('email'),
+      phone: _t('phone'),
       hours: _hours,
       otherBranchNames: others.map((b) => b.name),
       otherBranchCodes: others.map((b) => b.code),

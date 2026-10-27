@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 enum PermissionModule {
   organization('Organization & branches'),
   employees('Employees'),
+  employeeFields('Employee fields'),
   attendance('Attendance'),
   leave('Leave'),
   holidays('Holidays'),

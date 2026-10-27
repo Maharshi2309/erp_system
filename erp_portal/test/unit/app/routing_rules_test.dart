@@ -254,6 +254,7 @@ void main() {
         'Corrections',
         'Monthly summary',
         'Attendance exports',
+        'Face check', // D-70
       ]);
     });
 

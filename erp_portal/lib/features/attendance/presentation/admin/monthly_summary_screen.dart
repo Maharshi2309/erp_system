@@ -11,7 +11,6 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/file_download.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
-import '../../../../core/widgets/app_overlays.dart';
 import '../../../auth/presentation/widgets/auth_layout.dart';
 import '../../../dashboard/presentation/dashboard_widgets.dart';
 import '../../../employees/data/spreadsheet.dart';
@@ -128,14 +127,14 @@ class _MonthlySummaryScreenState extends ConsumerState<MonthlySummaryScreen> {
                 ];
               }(),
           ];
-          ref
-              .read(fileDownloadsProvider)
-              .save(
-                'attendance_${DateFormat('yyyy_MM').format(month)}.xlsx',
-                buildXlsx('Monthly summary', rows),
-                mimeType: xlsxMimeType,
-              );
-          showAppToast(context, 'Monthly summary exported');
+          startDownload(
+            context,
+            ref,
+            'attendance_${DateFormat('yyyy_MM').format(month)}.xlsx',
+            buildXlsx('Monthly summary', rows),
+            mimeType: xlsxMimeType,
+            done: 'Monthly summary exported',
+          );
         }
 
         final legend = Wrap(

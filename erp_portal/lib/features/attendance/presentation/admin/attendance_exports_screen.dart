@@ -10,7 +10,6 @@ import '../../../../core/utils/file_download.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_date_field.dart';
-import '../../../../core/widgets/app_overlays.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../../auth/presentation/widgets/auth_widgets.dart';
 import '../../../dashboard/presentation/dashboard_widgets.dart';
@@ -101,14 +100,14 @@ class _AttendanceExportsScreenState
               ]);
             }
           }
-          ref
-              .read(fileDownloadsProvider)
-              .save(
-                'attendance_${DateFormat('yyyyMMdd').format(from)}_${DateFormat('yyyyMMdd').format(to)}.xlsx',
-                buildXlsx('Attendance', rows),
-                mimeType: xlsxMimeType,
-              );
-          showAppToast(context, 'Exported ${rows.length - 1} records');
+          startDownload(
+            context,
+            ref,
+            'attendance_${DateFormat('yyyyMMdd').format(from)}_${DateFormat('yyyyMMdd').format(to)}.xlsx',
+            buildXlsx('Attendance', rows),
+            mimeType: xlsxMimeType,
+            done: 'Exported ${rows.length - 1} records',
+          );
         }
 
         return Column(

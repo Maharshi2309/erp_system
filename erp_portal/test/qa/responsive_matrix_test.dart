@@ -2,6 +2,7 @@
 // nine sizes, intermediate widths, live resizing and text scaling.
 import 'package:erp_portal/app/router/app_router.dart';
 import 'package:erp_portal/app/router/route_names.dart';
+import 'package:erp_portal/features/auth/data/demo_auth_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -44,6 +45,7 @@ final pagesByRole = <String, List<String>>{
     AppRoutes.attendanceRecords,
     AppRoutes.missingPunches,
     AppRoutes.monthlySummary,
+    AppRoutes.faceCheck,
     AppRoutes.leave,
     AppRoutes.leaveRequests,
     AppRoutes.leaveBalances,
@@ -85,6 +87,11 @@ final pagesByRole = <String, List<String>>{
     AppRoutes.myHolidays,
     AppRoutes.myNotifications,
     AppRoutes.myProfile,
+    AppRoutes.myFace,
+  ],
+  DemoAuthRepository.platformAdminEmail: [
+    AppRoutes.platform,
+    AppRoutes.platformOrg('org_meridian-tex'),
   ],
 };
 
@@ -202,14 +209,11 @@ void main() {
 
     c.read(appRouterProvider).go(AppRoutes.role('branchManager'));
     await tester.pumpAndSettle();
-    // Phone layout: one expandable section per module with switches.
-    await tester.ensureVisible(find.text('Leave').first);
+    // Area cards: switch one ability off.
+    final approve = find.bySemanticsLabel('Leave: Approve or reject leave');
+    await tester.ensureVisible(approve);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Leave').first);
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Approve').first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Approve').first);
+    await tester.tap(approve);
     await tester.pumpAndSettle();
     await tapText(tester, 'Review & save');
     inside(find.byType(AlertDialog), 'review dialog');

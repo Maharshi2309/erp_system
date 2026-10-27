@@ -2,6 +2,7 @@ import '../../organization/domain/branch.dart';
 import '../domain/custom_field.dart';
 import '../domain/employee.dart';
 import '../domain/employee_import.dart';
+import '../domain/field_settings.dart';
 
 String _date(DateTime d) =>
     '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
@@ -15,30 +16,41 @@ String _value(Object? v) => switch (v) {
 };
 
 /// Import template: standard columns plus every active custom field, with
-/// one example row (PRD §6.4, board S46 "Download template").
-List<List<String>> templateRows(List<CustomField> fields) {
+/// one example row (PRD §6.4, board S46 "Download template"). Hidden
+/// built-in fields are left out (D-73).
+List<List<String>> templateRows(
+  List<CustomField> fields, [
+  EmployeeFieldSettings settings = const EmployeeFieldSettings(),
+]) {
   final active = fields.where((f) => !f.archived).toList();
+  const example = {
+    ImportField.code: 'EMP-0001',
+    ImportField.firstName: 'Pooja',
+    ImportField.lastName: 'Chauhan',
+    ImportField.workEmail: 'pooja.c@example.in',
+    ImportField.mobile: '+91 98250 61233',
+    ImportField.designation: 'Quality Inspector',
+    ImportField.department: 'Quality',
+    ImportField.branch: 'Surat',
+    ImportField.manager: 'Bhavna Solanki',
+    ImportField.joiningDate: '19/10/2026',
+    ImportField.type: 'Full-time',
+    ImportField.shift: 'General',
+  };
+  final columns = [
+    for (final f in ImportField.values)
+      if (f.isShown(settings)) f,
+  ];
   return [
     [
-      for (final f in ImportField.values)
+      for (final f in columns)
         f == ImportField.joiningDate
             ? 'Joining date (DD/MM/YYYY)'
             : (f == ImportField.manager ? 'Reports to' : f.label),
       for (final f in active) f.label,
     ],
     [
-      'EMP-0001',
-      'Pooja',
-      'Chauhan',
-      'pooja.c@example.in',
-      '+91 98250 61233',
-      'Quality Inspector',
-      'Quality',
-      'Surat',
-      'Bhavna Solanki',
-      '19/10/2026',
-      'Full-time',
-      'General',
+      for (final f in columns) example[f]!,
       for (final f in active)
         f.type.hasOptions && f.options.isNotEmpty ? f.options.first : '',
     ],

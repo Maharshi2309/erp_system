@@ -14,6 +14,7 @@ Map<String, String> validateBranchDetails({
   required Iterable<String> otherBranchNames,
   String? code,
   Iterable<String> otherBranchCodes = const [],
+  String phone = '',
 }) {
   final errors = <String, String>{};
   final trimmedName = name.trim();
@@ -35,11 +36,14 @@ Map<String, String> validateBranchDetails({
   }
   if (address.trim().isEmpty) errors['address'] = 'Enter the branch address.';
   if (city.trim().isEmpty) errors['city'] = 'Enter the city.';
-  if (!RegExp(r'^\d{6}$').hasMatch(pin)) {
-    errors['pin'] = 'PIN codes have 6 digits.';
+  if (!Validators.isPin(pin)) {
+    errors['pin'] = Validators.pinMessage;
+  }
+  if (phone.trim().isNotEmpty && !Validators.isPhone(phone)) {
+    errors['phone'] = Validators.phoneMessage;
   }
   if (email.trim().isNotEmpty && !Validators.isEmail(email)) {
-    errors['email'] = 'Check the email address.';
+    errors['email'] = 'Check the email address.'; // board S19 wording
   }
   for (var i = 0; i < hours.length; i++) {
     if (!hours[i].isValid) {

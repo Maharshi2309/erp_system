@@ -1,0 +1,4 @@
+# Slow QA sweeps that press every control (D-81). Skip them on quick runs:
+#   flutter test --exclude-tags sweep
+tags:
+  sweep:

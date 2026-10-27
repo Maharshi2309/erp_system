@@ -157,9 +157,25 @@ class BranchesNotifier extends AsyncNotifier<List<Branch>> {
 }
 
 /// One branch by id, from [branchesProvider].
+/// Branches the signed-in member may see: all of them, or only their
+/// assigned branches for branch-scoped roles.
+final visibleBranchesProvider = Provider<AsyncValue<List<Branch>>>((ref) {
+  final scope = ref.watch(sessionProvider)?.branchIds ?? const <String>[];
+  return ref
+      .watch(branchesProvider)
+      .whenData(
+        (all) => scope.isEmpty
+            ? all
+            : [
+                for (final b in all)
+                  if (scope.contains(b.id)) b,
+              ],
+      );
+});
+
 final branchProvider = Provider.family<AsyncValue<Branch?>, String>(
   (ref, id) => ref
-      .watch(branchesProvider)
+      .watch(visibleBranchesProvider)
       .whenData((list) => list.where((b) => b.id == id).firstOrNull),
 );
 

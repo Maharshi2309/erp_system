@@ -73,10 +73,15 @@ class TeamApprovalsScreen extends ConsumerWidget {
               style: AppTypography.pageTitle,
             ),
           ),
-          Text(
-            'You approve leave for the $team people who report to you. You see their leave and balances only.',
-            style: AppTypography.small,
-          ),
+          Text(switch (session.role.scope) {
+            // Owners and HR reach this page too; their scope is wider.
+            DataScope.organization =>
+              'You approve leave for everyone in the organization.',
+            DataScope.assignedBranches =>
+              'You approve leave for people in your branches.',
+            _ =>
+              'You approve leave for the $team people who report to you. You see their leave and balances only.',
+          }, style: AppTypography.small),
           const SizedBox(height: AppSpacing.lg),
           if (waiting.isEmpty)
             const AppCard(

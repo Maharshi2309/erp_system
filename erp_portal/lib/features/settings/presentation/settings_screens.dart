@@ -287,6 +287,12 @@ class _AttendancePolicyScreenState
                     before: '${saved.earlyLeaveMinutes} min',
                     after: '${rules.earlyLeaveMinutes} min',
                   ),
+                if (saved.selfieCheck != rules.selfieCheck)
+                  (
+                    field: 'Selfie with each punch',
+                    before: saved.selfieCheck ? 'On' : 'Off',
+                    after: rules.selfieCheck ? 'On' : 'Off',
+                  ),
               ],
             );
         if (!mounted) return;
@@ -383,6 +389,32 @@ class _AttendancePolicyScreenState
                     ),
                   ),
                 ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppCard(
+            header: const CardHeader(
+              title: 'Self attendance with a selfie',
+              subtitle:
+                  'Checks it’s really the employee punching (face matching).',
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SwitchRow(
+                  label: 'Selfie with each punch',
+                  description:
+                      'Employees set up their face once (with consent, approved by HR). Each punch selfie is matched to it; punches that can’t be verified are saved and wait in Attendance → Face check.',
+                  value: rules.selfieCheck,
+                  onChanged: (v) =>
+                      setState(() => _draft = rules.copyWith(selfieCheck: v)),
+                ),
+                if (dirty && saved.selfieCheck != rules.selfieCheck)
+                  Text(
+                    'Changed from ${saved.selfieCheck ? 'on' : 'off'}',
+                    style: AppTypography.helper,
+                  ),
               ],
             ),
           ),

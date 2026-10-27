@@ -71,7 +71,7 @@ const settingsAreas = <SettingsArea>[
   ),
   (
     title: 'Employee fields',
-    hint: 'Custom fields, required fields and who can see them.',
+    hint: 'Which fields are asked, required or hidden; custom fields.',
     route: AppRoutes.employeeFields,
     icon: Icons.dynamic_form_outlined,
     keywords: 'custom field',
@@ -120,7 +120,9 @@ List<SettingsArea> areasFor(AppSession s) => [
     if (!a.ownerOnly || isOwnerLevel(s))
       if (a.route != AppRoutes.organization && a.route != AppRoutes.branches ||
           s.permissions.canView(PermissionModule.organization))
-        a,
+        if (a.route != AppRoutes.employeeFields ||
+            s.permissions.canView(PermissionModule.employeeFields))
+          a,
 ];
 
 /// Page frame for a settings area: side list (wide) or a select (narrow),

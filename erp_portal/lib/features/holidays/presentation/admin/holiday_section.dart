@@ -60,6 +60,11 @@ class HolidayScope {
     PermissionAction.create,
   );
 
+  bool get canExport => session.permissions.can(
+    PermissionModule.holidays,
+    PermissionAction.export,
+  );
+
   /// Organization holidays that reach the member's branches.
   late final visible = [
     for (final h in holidays)

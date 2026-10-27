@@ -24,6 +24,7 @@ import '../../data/employee_files.dart';
 import '../../data/spreadsheet.dart';
 import '../../domain/custom_field.dart';
 import '../../domain/employee_import.dart';
+import '../../domain/field_settings.dart';
 import '../providers/employee_providers.dart';
 import '../providers/import_controller.dart';
 
@@ -354,14 +355,21 @@ class _UploadStep extends ConsumerWidget {
     void template() {
       final fields =
           ref.read(customFieldsProvider).value ?? const <CustomField>[];
-      ref
-          .read(fileDownloadsProvider)
-          .save(
-            'staffline_employee_template.xlsx',
-            buildXlsx('Employees', templateRows(fields)),
-            mimeType: xlsxMimeType,
-          );
-      showAppToast(context, 'Template downloaded');
+      startDownload(
+        context,
+        ref,
+        'staffline_employee_template.xlsx',
+        buildXlsx(
+          'Employees',
+          templateRows(
+            fields,
+            ref.read(fieldSettingsProvider).value ??
+                const EmployeeFieldSettings(),
+          ),
+        ),
+        mimeType: xlsxMimeType,
+        done: 'Template downloaded',
+      );
     }
 
     final Widget zone;
@@ -595,7 +603,7 @@ class _MappingStep extends ConsumerWidget {
             .where((f) => !f.archived)
             .toList();
     final matched = state.mapping.where((t) => !t.isIgnored).length;
-    final missing = unmappedRequired(state.mapping);
+    final missing = unmappedRequired(state.mapping, state.fieldSettings);
     final needsOrder = needsDateOrder(table, state.mapping);
     final doubled = state.doubleMapped;
 
@@ -606,7 +614,8 @@ class _MappingStep extends ConsumerWidget {
             : 'Don’t import');
 
     final targets = <ImportTarget>[
-      for (final f in ImportField.values) ImportTarget.field(f),
+      for (final f in ImportField.values)
+        if (f.isShown(state.fieldSettings)) ImportTarget.field(f),
       for (final f in fields) ImportTarget.custom(f.key),
       const ImportTarget.ignore(),
     ];
@@ -718,7 +727,9 @@ class _MappingStep extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (final f in ImportField.values.where((f) => f.required))
+              for (final f in ImportField.values.where(
+                (f) => f.isRequired(state.fieldSettings),
+              ))
                 () {
                   final c = state.mapping.indexOf(ImportTarget.field(f));
                   final ok = c >= 0;
@@ -875,14 +886,14 @@ class _ValidateStep extends ConsumerWidget {
     final dupes = count(RowResult.duplicate);
 
     void report() {
-      ref
-          .read(fileDownloadsProvider)
-          .save(
-            'import_errors_${state.table!.fileName.split('.').first}.xlsx',
-            buildXlsx('Rows with problems', errorReportRows(rows)),
-            mimeType: xlsxMimeType,
-          );
-      showAppToast(context, 'Error report downloaded');
+      startDownload(
+        context,
+        ref,
+        'import_errors_${state.table!.fileName.split('.').first}.xlsx',
+        buildXlsx('Rows with problems', errorReportRows(rows)),
+        mimeType: xlsxMimeType,
+        done: 'Error report downloaded',
+      );
     }
 
     Widget counter(String label, int value, RowResult? result) {
@@ -1531,14 +1542,14 @@ class ImportResultsView extends ConsumerWidget {
     ].join(' ');
 
     void report() {
-      ref
-          .read(fileDownloadsProvider)
-          .save(
-            'import_report_${record.fileName.split('.').first}.xlsx',
-            buildXlsx('Not imported', resultReportRows(record)),
-            mimeType: xlsxMimeType,
-          );
-      showAppToast(context, 'Error report downloaded');
+      startDownload(
+        context,
+        ref,
+        'import_report_${record.fileName.split('.').first}.xlsx',
+        buildXlsx('Not imported', resultReportRows(record)),
+        mimeType: xlsxMimeType,
+        done: 'Error report downloaded',
+      );
     }
 
     Widget stat(String label, int v, String icon, Color color) => Container(

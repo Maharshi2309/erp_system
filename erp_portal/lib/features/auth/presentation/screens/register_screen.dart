@@ -51,15 +51,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   Map<String, String> _validate() {
-    final phoneDigits = _phone.text.replaceAll(RegExp(r'\D'), '');
     return {
-      if (_name.text.trim().isEmpty) 'name': 'Enter your full name.',
+      if (_name.text.trim().isEmpty)
+        'name': 'Enter your full name.'
+      else if (!Validators.isPersonName(_name.text, max: 80))
+        'name': Validators.nameMessage,
       if (_email.text.trim().isEmpty)
         'email': 'Enter your work email.'
       else if (!Validators.isEmail(_email.text))
         'email': 'Enter a valid work email, like name@company.com.',
-      if (phoneDigits.isNotEmpty && phoneDigits.length != 10)
-        'phone': 'Enter a 10-digit mobile number.',
+      if (_phone.text.trim().isNotEmpty && !Validators.isMobile(_phone.text))
+        'phone': Validators.mobileMessage,
       if (!isStrongPassword(
         _password.text,
         name: _name.text,

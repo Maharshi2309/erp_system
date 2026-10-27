@@ -27,6 +27,11 @@ enum SystemRole {
     hrAdmin => PermissionSet.of(const {
       PermissionModule.organization: [PermissionAction.view],
       PermissionModule.employees: PermissionAction.values,
+      // Which fields are asked when people are added (D-73).
+      PermissionModule.employeeFields: [
+        PermissionAction.view,
+        PermissionAction.edit,
+      ],
       PermissionModule.attendance: PermissionAction.values,
       PermissionModule.leave: PermissionAction.values,
       PermissionModule.holidays: PermissionAction.values,
